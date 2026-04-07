@@ -153,7 +153,51 @@ This document covers: (a) what each major player is building and how, (b) the te
 
 ---
 
-### 2.6 Industry Analyst and VC Consensus
+### 2.6 Glean
+
+**What it is:** Enterprise search and work assistant that has expanded into structured data and is now positioning itself as a context layer for enterprise AI.
+
+**Technical implementation:**
+- **Enterprise Graph:** Combines a knowledge graph (entities, relationships, concepts mined from across enterprise sources) with a personal graph (each user's docs, communications, projects). Used for both retrieval and personalization.
+- **100+ connectors:** Originally focused on unstructured knowledge (docs, wikis, chats, tickets). Recently extended to structured data sources including Databricks, Salesforce, and Jira.
+- **Enterprise memory with reinforcement learning:** Learns from execution traces -- which retrievals were useful, which weren't -- and uses RL signals to refine future retrieval.
+- **CEO framing:** "Build your enterprise context stack once, connect it broadly across your enterprise in perpetuity." Glean is explicitly positioning itself as *the* enterprise context platform.
+
+**Where it complements ECP:**
+- Glean does **knowledge** (unstructured: docs, chats, tickets, wikis). ECP does **data meaning** (structured: metrics, dimensions, semantic contracts, tribal knowledge about data).
+- An AI system can call Glean for "what did the team decide in last week's planning doc?" and call ECP for "what does APAC revenue mean and how do I compute it?"
+- ECP's federation mode can include a `GleanAdapter` so unstructured tribal knowledge from Glean enriches ECP's resolutions.
+
+**Where it could threaten:**
+- If Glean adds semantic contracts and a deterministic computation boundary, it would overlap directly with ECP. The current Glean architecture has no semantic firewall, no certification tiers, and no deterministic compute layer -- but the distance is closing as they move into structured data.
+
+**Positioning vs. ECP:** "Glean gives you knowledge. ECP gives you data meaning. Together, your AI systems get both."
+
+---
+
+### 2.7 Microsoft IQ Stack
+
+**What it is:** Microsoft's three-layer enterprise context architecture, announced as the foundation for Copilot, Fabric data agents, and Foundry agents.
+
+**The three layers:**
+- **Work IQ:** User context from M365 -- docs, emails, chats, meetings, workflow patterns. Built on the Microsoft Graph. Powers Copilot personalization.
+- **Fabric IQ:** Data context. An ontology with entity types, relationships, business rules, and validation constraints. Includes Power BI semantic models, a native graph store, data agents, and operations agents. **Key stat: 30+ million existing Power BI models serve as a jumpstart corpus for ontology auto-generation.**
+- **Foundry IQ:** Knowledge context. Permission-aware knowledge bases via Azure AI Search, with agentic retrieval over enterprise documents.
+
+**Stack ordering:** Fabric IQ is the data foundation, Foundry IQ is the knowledge middle, Work IQ is the workflow top. Together they're Microsoft's answer to "context layer for enterprise AI."
+
+**Distribution:**
+- A **Fabric IQ MCP server** is on the roadmap -- which means any AI system, including non-Microsoft ones, will be able to consume Fabric IQ context.
+
+**Critical ceiling:**
+- Non-Microsoft data requires manual effort. From Microsoft's own documentation: "Bringing in external data sources like an Oracle cloud database takes manual effort." Snowflake, Databricks, legacy mainframes, SAP -- all require bespoke integration work.
+- Fabric IQ assumes the customer has standardized on Microsoft for data. Most Fortune 500 enterprises have not.
+
+**Positioning vs. ECP:** "ECP makes Fabric IQ more valuable by connecting it to non-Microsoft data." ECP's `FabricIQAdapter` consumes the Fabric IQ ontology via the MCP server, enriches it with context from Snowflake, Glean, Atlan, and dbt, resolves cross-source conflicts, and exposes unified context to any AI system -- including Microsoft Copilot itself.
+
+---
+
+### 2.8 Industry Analyst and VC Consensus
 
 **a16z (March 2026):** Published "Your Data Agents Need Context" -- the definitive VC thesis piece. Key insights:
 - Models are smart enough; the bottleneck is business context
@@ -175,7 +219,7 @@ The market is converging on a three-store pattern, though no one has all three w
 
 | Store Type | Purpose | Who Uses It | ECP Spec |
 |---|---|---|---|
-| **Semantic Views / Metric Definitions** | Executable metric/dimension definitions that agents call for deterministic computation | Snowflake (Semantic Views), dbt (MetricFlow), Cube.js, AtScale | Semantic Layer (Cube.js) |
+| **Semantic Views / Metric Definitions** | Executable metric/dimension definitions that AI systems call for deterministic computation | Snowflake (Semantic Views), dbt (MetricFlow), Cube.js, AtScale | Semantic Layer (Cube.js) |
 | **Knowledge Graph / Ontology** | Entity relationships, cross-domain mappings, lineage, concept resolution | Atlan, Palantir, GraphRAG approaches, Neo4j-based custom builds | Knowledge Graph (Neo4j) |
 | **Vector Store / Embedding Index** | Semantic search for glossary terms, tribal knowledge, fuzzy matching | Standard RAG pattern, used by most agent platforms | Vector Store (Pinecone) |
 
@@ -302,8 +346,8 @@ This is the question nobody is answering well. The physical data estate is not s
 |---|---|---|---|---|---|---|
 | Cross-estate semantic mediation | Partial (connectors) | No | No (Snowflake only) | Unclear | Partial | Yes |
 | Resolution orchestration (multi-store parallel query) | No | No | No | Unclear | No | Yes |
-| Semantic Firewall (agents never touch raw data) | No | No | No | Unclear | No | Yes |
-| "Agent never does math" (deterministic computation) | No | No | Partial (Cortex Analyst) | Unclear | Yes (MetricFlow) | Yes |
+| Semantic Firewall (AI systems never touch raw data) | No | No | No | Unclear | No | Yes |
+| "AI Reasons. Databases Compute." (deterministic computation) | No | No | Partial (Cortex Analyst) | Unclear | Yes (MetricFlow) | Yes |
 | Tribal knowledge as first-class asset | No | No | No | Claimed | No | Yes |
 | Factory model (repeatable onboarding) | No | No | Partial (SVA auto-gen) | Unclear | No | Yes |
 | Certification tiers with provenance | No | No | No | No | No | Yes |
@@ -344,16 +388,57 @@ ADDITION 3: Drift Detection Service (new background process)
 **After (March 2026):**
 "The enterprise context platform that sits underneath agent operating systems (OpenAI Frontier, Anthropic Cowork) and above data platform semantic layers (Snowflake Semantic Views, dbt MetricFlow). ECP provides the deep semantic contracts, tribal knowledge, cross-estate resolution, and trust architecture that makes agents accurate on legacy enterprise data, delivered through a repeatable factory model that scales from 10 to 1000 datasets in months, not years."
 
+**Current (April 2026, v4 -- federation-first):**
+
+ECP is the **enterprise context layer** that gives any AI system -- agents, copilots, workflows, applications -- a trusted understanding of your business data. It **federates over your existing context investments** (Microsoft Fabric IQ, Snowflake SVA, Glean, Atlan, dbt), resolves conflicts between them, and gets smarter with every interaction.
+
+**Math vs Meaning:** Semantic layers do math. ECP does meaning. ECP tells the semantic layer *which* math to do, based on who is asking and what the enterprise context says is correct.
+
+**Three operating modes:**
+- **Federation Mode:** Enterprise has invested in Fabric IQ, Snowflake SVA, Glean, Atlan, dbt. ECP federates over them via MCP/API, resolves conflicts, adds trust + traces. ECP competes with none of them and makes all of them more valuable.
+- **Hybrid Mode:** Enterprise has partial investments. ECP federates where it can, brings its own stores for the gaps.
+- **Standalone Mode:** Enterprise has no existing context layer. ECP brings its own full stack and builds context via the Factory Model.
+
+**The sustainable moat is five things:**
+1. **Cross-platform resolution intelligence** -- the only layer that resolves conflicts *between* Fabric IQ, Snowflake SVA, Glean, Atlan, and dbt
+2. **Decision Trace Graph** -- structured record of every resolution, feeding back into the Context Registry
+3. **Deterministic computation boundary** -- AI reasons, databases compute; no AI system that calls ECP ever generates SQL
+4. **Certification tiers with provenance** -- every response carries source attribution and trust level
+5. **Three operating modes** -- works for any enterprise maturity level, from greenfield to fully invested
+
+**Updated competitive table (v4 framing):**
+
+| Player | Old framing | v4 framing |
+|---|---|---|
+| Microsoft Fabric IQ | Competitor | **Federates over** via FabricIQAdapter (MCP) |
+| Snowflake SVA | Competitor | **Federates over** via SnowflakeSVAAdapter (API) |
+| Glean | Adjacent | **Federates over** via GleanAdapter (Enterprise Graph API) |
+| Atlan | Competitor | **Federates over** via AtlanAdapter (MCP) |
+| dbt MetricFlow | Adjacent | **Federates over** via DbtAdapter (OSI) |
+| OpenAI Frontier / Anthropic Cowork | Above ECP | Consumers (call ECP via MCP) |
+
 ### 4.4 Key Messaging Updates
 
 **For CIOs/CAIOs:**
 - "OpenAI Frontier and Snowflake Semantic Views solve *part* of the context problem. Frontier connects your systems but does not resolve what your data means. Snowflake SVA defines metrics within Snowflake but cannot span your Oracle, SQL Server, and Databricks estate. ECP bridges the gap."
 
 **For Google Cloud:**
-- "ECP is cloud-agnostic and protocol-native (MCP, OSI, REST). It produces OSI-compliant semantic definitions that flow into BigQuery, Looker, and Vertex AI agents. It positions Google Cloud customers to deploy enterprise agents without requiring data migration to a single platform."
+- "ECP is cloud-agnostic and protocol-native (MCP, OSI, REST). It produces OSI-compliant semantic definitions that flow into BigQuery, Looker, and Vertex AI agents. It positions Google Cloud customers to deploy enterprise AI without requiring data migration to a single platform."
 
 **For UnitedHealth Group (or similar prospects):**
-- "Your data estate spans claims systems, EHR integrations, actuarial databases, and regulatory reporting pipelines across multiple platforms. No single vendor's semantic layer covers all of it. ECP wraps your entire estate with semantic contracts that any agent framework, including Frontier, Cowork, or your internal build, can consume safely."
+- "Your data estate spans claims systems, EHR integrations, actuarial databases, and regulatory reporting pipelines across multiple platforms. No single vendor's semantic layer covers all of it. ECP wraps your entire estate with semantic contracts that any AI system, including Frontier, Cowork, Copilot, or your internal build, can consume safely."
+
+**For Microsoft (Fabric IQ customers):**
+- "ECP makes Fabric IQ work in a multi-platform world. We consume your ontology via MCP, enrich with context from Snowflake and Glean, resolve conflicts, and expose unified context to any AI system including Copilot."
+
+**For Snowflake (SVA customers):**
+- "ECP extends SVA beyond Snowflake. We import your semantic views, add tribal knowledge and certification, and make your definitions available to AI systems that don't query Snowflake directly."
+
+**For Glean customers:**
+- "Glean gives you knowledge. ECP gives you data meaning. Together, your AI systems get both."
+
+**For Atlan customers:**
+- "Atlan catalogs your metadata. ECP resolves meaning from it. Together, your AI systems get governed, disambiguated, trustworthy answers."
 
 ---
 
@@ -365,7 +450,7 @@ ADDITION 3: Drift Detection Service (new background process)
 
 3. **Drift Detection Service** -- Highest enterprise credibility. Addresses the "what happens when the data estate changes" question that every CIO asks.
 
-4. **MCP Server for Context Registry** -- Enables any MCP-compatible agent (Claude, GPT, custom) to query ECP's Context Registry directly. This is the distribution play.
+4. **MCP Server for Context Registry** -- Enables any MCP-compatible AI system (Claude, GPT, Copilot, custom) to query ECP's Context Registry directly. This is the distribution play.
 
 5. **Snowflake Semantic View importer** -- Practical integration. Many prospects will already have Snowflake SVA running. ECP should ingest those definitions as a starting point for the factory model.
 
