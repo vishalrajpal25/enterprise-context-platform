@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools
+          python -m pip install -e ".[dev]"
+      - name: Ruff
+        run: ruff check src tests
+      - name: Pytest
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: pytest tests/ -q
+
+  mcp:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/protocol
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install MCP dependencies
+        run: npm ci
+      - name: MCP smoke test
+        run: npm test
+
+  golden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools
+          python -m pip install -e ".[dev]"
+      - name: Start Docker services
+        run: docker compose up -d
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 60); do
+            docker compose exec -T postgres pg_isready -U ecp -d ecp && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: Wait for Neo4j HTTP
+        run: |
+          for i in $(seq 1 90); do
+            curl -sf http://127.0.0.1:7474/ >/dev/null && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: Init and seed databases
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python scripts/init_db.py
+          python scripts/seed_data.py
+      - name: Run API and golden suite
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          ECP_OPA_DEFAULT_ALLOW: "true"
+        run: |
+          uvicorn src.main:app --host 127.0.0.1 --port 8080 &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8080/health >/dev/null && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8080/health >/dev/null
+          python scripts/run_golden_eval.py http://127.0.0.1:8080
+          python scripts/security_smoke.py http://127.0.0.1:8080
+          python scripts/load_smoke.py http://127.0.0.1:8080 30 3 5000 "" 10 1

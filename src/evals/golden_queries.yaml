@@ -1,0 +1,123 @@
+# Golden Query Suite: reference queries with expected resolutions.
+# Used by CI (.github/workflows/ci.yml) and scripts/run_golden_eval.py.
+# Each query is run against /api/v1/resolve and the response's resolved
+# concept IDs are compared to expected_concepts.
+
+golden_queries:
+  - name: "finance_apac_revenue_last_quarter"
+    query: "What was APAC revenue last quarter?"
+    department: "finance"
+    expected_status: "complete"
+    expected_concepts:
+      metric: "net_revenue"
+      dimension: "region_apac_finance"
+      time: "last_quarter"
+
+  - name: "sales_apac_revenue_last_quarter"
+    query: "What was APAC revenue last quarter?"
+    department: "sales"
+    expected_status: "complete"
+    expected_concepts:
+      metric: "gross_revenue"
+      dimension: "region_apac_sales"
+      time: "last_quarter"
+
+  - name: "finance_revenue_vs_budget"
+    query: "Compare APAC revenue to budget last quarter"
+    department: "finance"
+    expected_status: "complete"
+    expected_concepts:
+      metric: "net_revenue"
+      dimension: "region_apac_finance"
+      time: "last_quarter"
+      comparison: "budget"
+
+  - name: "emea_revenue_this_quarter"
+    query: "What is EMEA revenue this quarter?"
+    department: "finance"
+    expected_status: "complete"
+    expected_concepts:
+      metric: "net_revenue"
+      dimension: "region_emea"
+      time: "current_quarter"
+
+  - name: "churn_rate_product"
+    query: "What is our customer churn rate?"
+    department: "product"
+    expected_status: "complete"
+    expected_concepts:
+      metric: "churn_rate"
+
+  - name: "global_revenue_ytd"
+    query: "What is global revenue year to date?"
+    department: "finance"
+    expected_status: "complete"
+    expected_concepts:
+      metric: "net_revenue"
+      time: "year_to_date"
+
+  - name: "headcount_apac"
+    query: "How many employees do we have in APAC?"
+    department: "operations"
+    expected_status: "complete"
+    expected_concepts:
+      metric: "headcount"
+      dimension: "region_apac"
+
+  - name: "revenue_trend_last_year"
+    query: "Show me APAC revenue last year"
+    department: "finance"
+    expected_status: "complete"
+    expected_concepts:
+      metric: "net_revenue"
+      dimension: "region_apac_finance"
+      time: "last_year"
+
+  - name: "cost_americas_last_quarter"
+    query: "What were Americas costs last quarter?"
+    department: "finance"
+    expected_status: "complete"
+    expected_concepts:
+      metric: "cost"
+      dimension: "region_americas"
+      time: "last_quarter"
+
+  - name: "retention_customer_success"
+    query: "What is our customer retention rate?"
+    department: "customer_success"
+    expected_status: "complete"
+    expected_concepts:
+      metric: "retention"
+
+  # ----- Fiscal calendar correctness -----
+  # These don't pin a specific quarter (the resolver computes from
+  # datetime.now()), but they verify the resolver is wired in by checking
+  # that the *time* concept resolves to the canonical id. The richer DAG
+  # check (that the execution plan contains a date_range with a real
+  # ISO start/end) is in scripts/security_smoke.py extension area.
+
+  - name: "previous_quarter_synonym"
+    query: "What was APAC revenue previous quarter?"
+    department: "finance"
+    expected_status: "complete"
+    expected_concepts:
+      metric: "net_revenue"
+      dimension: "region_apac_finance"
+      time: "last_quarter"
+
+  - name: "ytd_acronym"
+    query: "What is APAC revenue YTD?"
+    department: "finance"
+    expected_status: "complete"
+    expected_concepts:
+      metric: "net_revenue"
+      dimension: "region_apac_finance"
+      time: "year_to_date"
+
+  - name: "mtd_global_cost"
+    query: "What is our global cost MTD?"
+    department: "finance"
+    expected_status: "complete"
+    expected_concepts:
+      metric: "cost"
+      time: "month_to_date"

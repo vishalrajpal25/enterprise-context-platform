@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Enterprise Context Platform — live demo</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #14181d;
+    --border: #232a32;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #5eead4;
+    --warn: #f59e0b;
+    --err: #ef4444;
+    --good: #22c55e;
+    --code-bg: #0f1216;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5;
+  }
+  header {
+    padding: 28px 24px 16px; max-width: 980px; margin: 0 auto;
+  }
+  header h1 { margin: 0 0 6px; font-size: 22px; letter-spacing: -0.01em; }
+  header p { margin: 4px 0; color: var(--muted); font-size: 14px; }
+  header code { color: var(--accent); }
+  main { max-width: 980px; margin: 0 auto; padding: 0 24px 60px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  @media (max-width: 760px) { .row { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px;
+  }
+  .panel h2 { margin: 0 0 10px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+  input, select, textarea {
+    width: 100%; padding: 8px 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--code-bg); color: var(--text);
+    font-family: inherit; font-size: 13px;
+  }
+  textarea { min-height: 64px; resize: vertical; }
+  .controls { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  button {
+    background: var(--accent); color: #0b0d10; border: 0; padding: 8px 14px;
+    border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;
+  }
+  button.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px; overflow: auto; max-height: 520px;
+    font-size: 12px; line-height: 1.45; margin: 0;
+  }
+  .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600;
+  }
+  .pill.ok { background: rgba(34,197,94,0.15); color: var(--good); }
+  .pill.warn { background: rgba(245,158,11,0.15); color: var(--warn); }
+  .pill.err { background: rgba(239,68,68,0.15); color: var(--err); }
+  .meta { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin: 6px 0 14px; }
+  .meta strong { color: var(--text); font-weight: 600; }
+  .preset { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .preset button {
+    background: transparent; color: var(--text);
+    border: 1px solid var(--border); padding: 4px 8px; font-weight: 400; font-size: 11px;
+  }
+  footer { max-width: 980px; margin: 24px auto 0; padding: 0 24px 40px; color: var(--muted); font-size: 12px; }
+  footer a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Enterprise Context Platform — live demo</h1>
+  <p>A working semantic mediation layer between AI agents and enterprise data. Real graph + pgvector + decision traces. Not a blog post.</p>
+  <p>API: <code id="api-base"></code> · <span id="health-pill" class="pill warn">checking…</span></p>
+</header>
+<main>
+  <section class="panel">
+    <h2>1. Resolve a business concept</h2>
+    <label for="concept">Concept</label>
+    <textarea id="concept">What was APAC revenue last quarter?</textarea>
+    <div class="preset">
+      <button data-preset="What was APAC revenue last quarter?">APAC revenue last quarter (finance)</button>
+      <button data-preset="What was APAC revenue last quarter?" data-dept="sales">APAC revenue last quarter (sales)</button>
+      <button data-preset="Compare APAC revenue to budget last quarter">APAC revenue vs budget</button>
+      <button data-preset="What is EMEA revenue this quarter?">EMEA this quarter</button>
+      <button data-preset="What were Americas costs last quarter?">Americas costs</button>
+      <button data-preset="What is global revenue year to date?">Global revenue YTD</button>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <div>
+        <label for="dept">Department</label>
+        <select id="dept">
+          <option>finance</option>
+          <option>sales</option>
+          <option>operations</option>
+          <option>product</option>
+          <option>customer_success</option>
+        </select>
+      </div>
+      <div>
+        <label for="user">User ID (any string — used for trace ownership)</label>
+        <input id="user" value="demo_visitor" />
+      </div>
+    </div>
+    <div class="controls">
+      <button id="resolve-btn">Resolve →</button>
+      <button id="execute-btn" class="ghost" disabled>Execute (stored plan)</button>
+      <button id="feedback-btn" class="ghost" disabled>👍 Mark resolution accepted</button>
+    </div>
+  </section>
+
+  <div class="row">
+    <div class="panel">
+      <h2>Resolution response</h2>
+      <div class="meta" id="resolve-meta"></div>
+      <pre id="resolve-out">// click Resolve to see real graph + pgvector lookups, decision trace, fiscal calendar resolution, and tribal knowledge</pre>
+    </div>
+    <div class="panel">
+      <h2>Execute / Feedback / Provenance</h2>
+      <pre id="exec-out">// run a resolution first, then click Execute or 👍</pre>
+    </div>
+  </div>
+</main>
+<footer>
+  <p>This page calls the live API directly from your browser. Source: <a href="https://github.com/" target="_blank">github.com/your-handle/enterprise-context-platform</a> · License: Apache 2.0</p>
+</footer>
+<script>
+  const API_BASE = (new URL(location.href)).searchParams.get("api") || "http://localhost:8080";
+  document.getElementById("api-base").textContent = API_BASE;
+
+  const $ = (id) => document.getElementById(id);
+  let lastResolutionId = null;
+
+  async function api(path, opts = {}) {
+    const headers = { "content-type": "application/json", "x-ecp-user-id": $("user").value || "demo_visitor", "x-ecp-department": $("dept").value, "x-ecp-role": "analyst" };
+    const r = await fetch(API_BASE + path, { ...opts, headers: { ...headers, ...(opts.headers || {}) } });
+    const text = await r.text();
+    try { return { status: r.status, body: JSON.parse(text) }; }
+    catch { return { status: r.status, body: text }; }
+  }
+
+  async function checkHealth() {
+    const pill = $("health-pill");
+    try {
+      const { status, body } = await api("/health");
+      if (status === 200 && body.status === "ok") {
+        pill.textContent = `${body.mode}${body.demo_mode ? " · demo" : ""}${body.embedding_available ? " · embeddings ✓" : " · ILIKE"}`;
+        pill.className = "pill ok";
+      } else {
+        pill.textContent = "degraded"; pill.className = "pill warn";
+      }
+    } catch { pill.textContent = "offline"; pill.className = "pill err"; }
+  }
+
+  document.querySelectorAll(".preset button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      $("concept").value = btn.dataset.preset;
+      if (btn.dataset.dept) $("dept").value = btn.dataset.dept;
+    });
+  });
+
+  $("resolve-btn").addEventListener("click", async () => {
+    $("resolve-out").textContent = "// resolving…";
+    $("resolve-meta").textContent = "";
+    const t0 = performance.now();
+    const { status, body } = await api("/api/v1/resolve", {
+      method: "POST",
+      body: JSON.stringify({ concept: $("concept").value, user_context: null }),
+    });
+    const ms = (performance.now() - t0).toFixed(0);
+    $("resolve-out").textContent = JSON.stringify(body, null, 2);
+    if (status === 200 && body.resolution_id) {
+      lastResolutionId = body.resolution_id;
+      const conf = body.confidence?.overall ?? 0;
+      const dag = body.resolution_dag?.length ?? 0;
+      const warns = body.warnings?.length ?? 0;
+      $("resolve-meta").innerHTML = `
+        <span><strong>${body.status}</strong></span>
+        <span>id <strong>${body.resolution_id}</strong></span>
+        <span>confidence <strong>${conf.toFixed(2)}</strong></span>
+        <span>dag <strong>${dag} steps</strong></span>
+        <span>tribal warnings <strong>${warns}</strong></span>
+        <span>round-trip <strong>${ms}ms</strong></span>
+      `;
+      $("execute-btn").disabled = false;
+      $("feedback-btn").disabled = false;
+    } else {
+      $("resolve-meta").innerHTML = `<span class="pill err">HTTP ${status}</span>`;
+      $("execute-btn").disabled = true;
+      $("feedback-btn").disabled = true;
+    }
+  });
+
+  $("execute-btn").addEventListener("click", async () => {
+    if (!lastResolutionId) return;
+    $("exec-out").textContent = "// executing stored plan…";
+    const { body } = await api("/api/v1/execute", {
+      method: "POST",
+      body: JSON.stringify({ resolution_id: lastResolutionId, parameters: {} }),
+    });
+    $("exec-out").textContent = JSON.stringify(body, null, 2);
+  });
+
+  $("feedback-btn").addEventListener("click", async () => {
+    if (!lastResolutionId) return;
+    const { body } = await api("/api/v1/feedback", {
+      method: "POST",
+      body: JSON.stringify({ resolution_id: lastResolutionId, feedback: "accepted", correction_details: "" }),
+    });
+    $("exec-out").textContent = JSON.stringify(body, null, 2) + "\n\n// next time you resolve a similar query, watch for a precedent boost.";
+  });
+
+  checkHealth();
+</script>
+</body>
+</html>
