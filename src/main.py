@@ -93,7 +93,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Enterprise Context Platform",
     version="3.0.0",
-    description="Cross-estate semantic mediation layer for enterprise agentic AI",
+    description="Enterprise context layer for any AI system -- agents, copilots, workflows, applications",
     lifespan=lifespan,
 )
 
@@ -184,7 +184,7 @@ def _enforce_session_owner(session: dict, http_request: Request) -> None:
 async def resolve_concept(request: ResolveRequest, http_request: Request):
     """
     Resolve a business concept to canonical definition and execution plan.
-    This is the primary entry point for agents.
+    This is the primary entry point for AI systems.
     """
     _require_api_key(http_request)
     request = _extract_user_context(request, http_request)

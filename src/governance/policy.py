@@ -1,7 +1,7 @@
 """OPA policy client for access control evaluation.
 
 ECP inherits and enforces access control — it never invents its own.
-Identity passes through from the agent platform (JWT/OAuth) via user_context,
+Identity passes through from the calling AI system (JWT/OAuth) via user_context,
 and OPA evaluates policies against the user's identity, role, and domain.
 
 When OPA is unavailable, the system defaults to allow (configurable).
