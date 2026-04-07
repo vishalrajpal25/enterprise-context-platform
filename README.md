@@ -1,10 +1,14 @@
 # Enterprise Context Platform
 
-Getting AI agents to answer questions correctly on enterprise data is hard, and it's not a problem you can solve by picking the right database or the right retrieval trick. The meaning of the data lives outside the data — in definitions that differ between departments, in fiscal calendars nobody told the model about, in tribal knowledge that only the senior analyst remembers, in decades of logic buried in old stored procedures.
+> The enterprise context layer that gives any AI system a trusted understanding of your business data. Federates over existing context investments (Microsoft IQ, Snowflake SVA, Glean, Atlan, dbt) or brings its own.
 
-A knowledge graph can't fix this on its own. Neither can an ontology, or a semantic layer, or RAG. Each of those is useful, but each is a component. What's actually needed is a system that extracts this context from legacy systems, captures what people know, keeps it current as the business changes, and serves it to agents with enough provenance that the answers can be trusted.
+Getting AI systems to answer questions correctly on enterprise data is hard, and it's not a problem you can solve by picking the right database or the right retrieval trick. The meaning of the data lives outside the data — in definitions that differ between departments, in fiscal calendars nobody told the model about, in tribal knowledge that only the senior analyst remembers, in decades of logic buried in old stored procedures.
 
-ECP is that system. It's built around the idea that context has to be maintained like a live service, not generated once and forgotten. Agents talk to it over MCP and get back canonical definitions, time periods resolved against the real fiscal calendar, warnings from known issues, an execution plan against your semantic layer, and a decision trace for every call.
+A knowledge graph can't fix this on its own. Neither can an ontology, or a semantic layer, or RAG. Each of those is useful, but each is a component. What's actually needed is a system that extracts this context from legacy systems, captures what people know, keeps it current as the business changes, and serves it to AI systems with enough provenance that the answers can be trusted.
+
+ECP is that system. It's built around the idea that context has to be maintained like a live service, not generated once and forgotten. AI systems — agents, copilots, workflows, applications — talk to it over MCP and get back canonical definitions, time periods resolved against the real fiscal calendar, warnings from known issues, an execution plan against your semantic layer, and a decision trace for every call.
+
+**Math vs Meaning:** Semantic layers do math. ECP does meaning. ECP tells the semantic layer *which* math to do, based on who is asking and what the enterprise context says is correct.
 
 ## Why no single tool solves this
 
@@ -21,12 +25,21 @@ Each of these is real and useful inside a bigger thing. The bigger thing is not 
 ## Architecture
 
 ```
-Agent (Claude / GPT / custom)
-   │  MCP stdio
+AI System (Claude / GPT / Copilot / agent / workflow / app)
+   │  MCP stdio  /  REST  /  OSI
    ▼
 ECP API (FastAPI)
    │
    ├─ Resolution Engine (orchestrator | intelligent)
+   │
+   ├─ Federation Adapter Layer (v4)
+   │     ├─ FabricIQAdapter      (MCP)        — Microsoft Fabric IQ ontology
+   │     ├─ SnowflakeSVAAdapter  (API)        — Snowflake Semantic Views
+   │     ├─ GleanAdapter         (API)        — Glean Enterprise Graph
+   │     ├─ AtlanAdapter         (MCP)        — Atlan metadata + lineage
+   │     ├─ DbtAdapter           (OSI)        — dbt MetricFlow definitions
+   │     └─ NativeAdapter        (always on)  — ECP's own stores below
+   │
    ├─ Knowledge Graph (Neo4j) — relationships, variations, lineage
    ├─ Asset Registry (Postgres + JSONB) — versioned definitions, contracts, tribal knowledge
    ├─ Vector Store (Postgres + pgvector) — Voyage or OpenAI embeddings, with honest ILIKE fallback
@@ -34,6 +47,8 @@ ECP API (FastAPI)
    ├─ OPA Policy — fail-closed by default
    └─ Semantic Layer Executor (Cube.js REST) — deterministic computation against your warehouse
 ```
+
+**Three operating modes:** Federation (federates over existing investments), Hybrid (federates where possible, brings its own for gaps), Standalone (default for the demo, ECP brings its own full stack).
 
 ## What's in the box (v3.0)
 
@@ -75,6 +90,8 @@ python scripts/demo.py             # canonical resolution flow
 ```
 
 Open [docs/demo/index.html](docs/demo/index.html) directly in a browser, or serve it with `python -m http.server` from `docs/demo/` — it talks to `http://localhost:8080` by default. Pass `?api=https://your-deploy.example.com` to point it elsewhere.
+
+> In **federation mode**, configure adapters in `config/adapters.yaml` (planned in v4 — see `docs/enterprise-context-platform-spec-v4.md` §1.3). In **standalone mode** (default for the demo), ECP uses its own Neo4j + PostgreSQL stores via `NativeAdapter`.
 
 ### Environment variables
 
