@@ -1,14 +1,12 @@
 # Enterprise Context Platform
 
-> The enterprise context layer that gives any AI system a trusted understanding of your business data. Federates over existing context investments (Microsoft IQ, Snowflake SVA, Glean, Atlan, dbt) or brings its own.
+> The context layer between AI systems and enterprise data. Federates over your existing investments (Microsoft IQ, Snowflake SVA, Glean, Atlan, dbt) or brings its own.
 
-Getting AI systems to answer questions correctly on enterprise data is hard, and it's not a problem you can solve by picking the right database or the right retrieval trick. The meaning of the data lives outside the data — in definitions that differ between departments, in fiscal calendars nobody told the model about, in tribal knowledge that only the senior analyst remembers, in decades of logic buried in old stored procedures.
+The meaning of enterprise data lives outside the data — in definitions that differ between departments, fiscal calendars nobody told the model about, and tribal knowledge only the senior analyst remembers. No single tool (graph, ontology, semantic layer, RAG) solves this alone.
 
-A knowledge graph can't fix this on its own. Neither can an ontology, or a semantic layer, or RAG. Each of those is useful, but each is a component. What's actually needed is a system that extracts this context from legacy systems, captures what people know, keeps it current as the business changes, and serves it to AI systems with enough provenance that the answers can be trusted.
+ECP resolves business concepts for AI systems over MCP: canonical definitions, fiscal-aware time, tribal knowledge warnings, an execution plan against your semantic layer, and a decision trace for every call. Context maintained as a live service, not generated once and forgotten.
 
-ECP is that system. It's built around the idea that context has to be maintained like a live service, not generated once and forgotten. AI systems — agents, copilots, workflows, applications — talk to it over MCP and get back canonical definitions, time periods resolved against the real fiscal calendar, warnings from known issues, an execution plan against your semantic layer, and a decision trace for every call.
-
-**Math vs Meaning:** Semantic layers do math. ECP does meaning. ECP tells the semantic layer *which* math to do, based on who is asking and what the enterprise context says is correct.
+**Semantic layers do math. ECP does meaning.** ECP tells the semantic layer *which* math to do, based on who is asking.
 
 ## Why no single tool solves this
 
