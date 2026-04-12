@@ -3,7 +3,7 @@
 Provider-flexible. Reads ECP_EMBEDDING_PROVIDER from settings:
   - "voyage" (default) → Voyage AI, Anthropic's recommended embeddings
                          partner. Free tier covers the demo lifetime.
-                         Default model: voyage-3-lite (1024 dims).
+                         Default model: voyage-3-lite (512 dims).
   - "openai"           → OpenAI text-embedding-3-small (1536 dims).
   - "none"             → No embeddings; vector search and precedent
                          similarity degrade to ILIKE text search.

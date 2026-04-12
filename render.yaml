@@ -46,11 +46,11 @@ services:
 
       # Embeddings — defaults to Voyage (free tier, no card). Switch by env:
       #   ECP_EMBEDDING_PROVIDER=voyage   (default)
-      #   ECP_EMBEDDING_DIM=1024          (voyage-3-lite); set 1536 for openai
+      #   ECP_EMBEDDING_DIM=512           (voyage-3-lite); set 1536 for openai
       - key: ECP_EMBEDDING_PROVIDER
         value: voyage
       - key: ECP_EMBEDDING_DIM
-        value: "1024"
+        value: "512"
 
       # Set these as SECRETS in the Render dashboard, not here:
       #   ECP_POSTGRES_DSN     (Neon connection string, must include sslmode=require)

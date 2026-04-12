@@ -105,8 +105,8 @@ For a richer, guided end-user flow (governance, entitlement, latency, provenance
 | `ECP_OPA_DEFAULT_ALLOW` | `false` (fail-closed) | Set `true` *only* for the public demo with no OPA |
 | `ECP_SEARCH_REQUIRE_IDENTITY` | `true` | Anonymous search returns empty when true |
 | `ECP_EMBEDDING_PROVIDER` | `voyage` | `voyage` \| `openai` \| `none` |
-| `ECP_EMBEDDING_MODEL` | provider default | `voyage-3-lite` (1024d) or `text-embedding-3-small` (1536d) |
-| `ECP_EMBEDDING_DIM` | `1024` | Must match the active provider; re-run `init_db.py` after changing |
+| `ECP_EMBEDDING_MODEL` | provider default | `voyage-3-lite` (512d) or `text-embedding-3-small` (1536d) |
+| `ECP_EMBEDDING_DIM` | `512` | Must match the active provider; re-run `init_db.py` after changing |
 | `ECP_VOYAGE_API_KEY` | unset | Free tier at voyageai.com — no card required |
 | `ECP_OPENAI_API_KEY` | unset | Pay-per-use, ~$0.05 lifetime at demo scale |
 | `ECP_ANTHROPIC_API_KEY` | unset | Used by intelligent mode for intent parsing |

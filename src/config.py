@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # change is all that's needed to swap providers cleanly.
     embedding_provider: str = "voyage"   # "voyage" | "openai" | "none"
     embedding_model: str = ""            # auto-picked from provider if empty
-    embedding_dim: int = 1024            # voyage-3-lite default; OpenAI=1536
+    embedding_dim: int = 512             # voyage-3-lite default; OpenAI text-embedding-3-small=1536
 
     # Neo4j
     neo4j_uri: str = "bolt://localhost:7687"
