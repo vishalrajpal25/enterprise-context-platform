@@ -78,8 +78,6 @@ secrets.json
 # Private — keep out of public repo
 docs/linkedin-post.md
 docs/substack-article.md
-docs/DEPLOY.md
 docs/enterprise-context-platform-market-update.md
-render.yaml
 
 # uv.lock is checked in for deterministic builds — do NOT ignore.

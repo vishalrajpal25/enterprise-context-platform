@@ -1,0 +1,63 @@
+# Render.com Blueprint — free-tier deployment.
+#
+# Hosting strategy (target: $0/month, ~$5–10 lifetime spend on OpenAI embeddings):
+#   - Render free web service (this file)
+#   - Neon free Postgres + pgvector (https://neon.tech)
+#   - Neo4j AuraDB Free (https://neo4j.com/cloud/aura)
+#   - Upstash Redis free (https://upstash.com)  [optional, currently unused at runtime]
+#   - UptimeRobot free 5-min HTTP check pointed at /admin/keep-warm
+#     (keeps the entire stack — Render + Neon + AuraDB — from auto-pausing)
+#
+# After first successful deploy:
+#   1. Set ECP_BOOTSTRAP_DB=true and ECP_AUTO_SEED_DEMO=true, redeploy once
+#   2. Verify https://<service>.onrender.com/health returns demo_mode=true
+#   3. Set both bootstrap flags back to false
+#   4. Add an UptimeRobot HTTP check on https://<service>.onrender.com/admin/keep-warm
+
+services:
+  - type: web
+    name: ecp-api
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      # Resolution behavior
+      - key: ECP_RESOLUTION_MODE
+        value: orchestrator
+      - key: ECP_DEMO_MODE
+        value: "true"
+
+      # OPA: no policy server in the free demo, so fail-open is intentional.
+      # NEVER copy this value to a production deployment.
+      - key: ECP_OPA_DEFAULT_ALLOW
+        value: "true"
+
+      # Search posture: identity-required, but the demo HTML page sends a
+      # demo user header, so search still works for visitors.
+      - key: ECP_SEARCH_REQUIRE_IDENTITY
+        value: "true"
+
+      # First-deploy bootstrap (flip back to false after the first run).
+      - key: ECP_BOOTSTRAP_DB
+        value: "false"
+      - key: ECP_AUTO_SEED_DEMO
+        value: "false"
+
+      # Embeddings — defaults to Voyage (free tier, no card). Switch by env:
+      #   ECP_EMBEDDING_PROVIDER=voyage   (default)
+      #   ECP_EMBEDDING_DIM=1024          (voyage-3-lite); set 1536 for openai
+      - key: ECP_EMBEDDING_PROVIDER
+        value: voyage
+      - key: ECP_EMBEDDING_DIM
+        value: "1024"
+
+      # Set these as SECRETS in the Render dashboard, not here:
+      #   ECP_POSTGRES_DSN     (Neon connection string, must include sslmode=require)
+      #   ECP_NEO4J_URI        (neo4j+s://<id>.databases.neo4j.io)
+      #   ECP_NEO4J_USER       (neo4j)
+      #   ECP_NEO4J_PASSWORD   (from AuraDB console)
+      #   ECP_REDIS_URL        (optional)
+      #   ECP_ANTHROPIC_API_KEY (for intelligent mode)
+      #   ECP_VOYAGE_API_KEY    (free at voyageai.com — for cosine retrieval)
+      #   ECP_OPENAI_API_KEY    (alternative embedding provider)
