@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ECP — Same Question, Different Answer</title></head>
+<body style="background:#0B0B0F;display:flex;justify-content:center;padding:40px 20px">
+<h2 class="sr-only">Same question produces different answers for two personas</h2>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+.w{background:#0B0B0F;border-radius:14px;padding:28px 24px 22px;font-family:'Inter',sans-serif}
+.head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px}
+.brand{font-size:10px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#A0B0C8}
+.tag{font-size:10px;color:#7888A0;font-style:italic}
+
+.h1{font-size:18px;font-weight:600;color:#D0D8E8;text-align:center;margin-bottom:4px;letter-spacing:-0.3px}
+.sub{font-size:11px;color:#6878A0;text-align:center;margin-bottom:18px}
+
+.zone{border:1.5px solid #3A5580;border-radius:10px;background:#101828;padding:14px 18px;margin-bottom:18px}
+.zone-label{font-size:9px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#70A0D8;margin-bottom:8px}
+.qt{font-size:13px;color:#C0C8D8;line-height:1.6;font-style:italic;text-align:center}
+
+.grid{display:grid;grid-template-columns:1fr 28px 1fr;gap:0;margin-bottom:18px}
+.card{padding:18px;border:1.5px solid #1E1E28;border-radius:10px;background:#101016}
+.card.left{border-color:#2A6040;background:#0E1A14}
+.card.right{border-color:#6A5020;background:#181208}
+.persona{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+.card.left .avatar{background:#143828;color:#60E888;border:1.5px solid #2A6040}
+.card.right .avatar{background:#2A2010;color:#F8D848;border:1.5px solid #6A5020}
+.pname{font-size:13px;font-weight:600;color:#D0D8E8}
+.prole{font-size:10px;color:#7888A0;font-family:'IBM Plex Mono',monospace}
+.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1A1A24}
+.row:last-child{border-bottom:none}
+.rk{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:#7080A0}
+.rv{font-size:12px;text-align:right}
+.card.left .rv{color:#90E0A8}
+.card.right .rv{color:#F0D878}
+.big{font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:700;text-align:center;padding:14px 0 4px}
+.card.left .big{color:#60E888}
+.card.right .big{color:#F8D848}
+.bigsub{font-size:10px;color:#6A7A90;text-align:center;padding-bottom:8px}
+.conf{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid #1A1A24}
+.conf-bar{height:5px;border-radius:3px;flex:1}
+.card.left .conf-bar{background:linear-gradient(90deg,#60E888 0%,#60E888 92%,#1E1E28 92%)}
+.card.right .conf-bar{background:linear-gradient(90deg,#F8D848 0%,#F8D848 88%,#1E1E28 88%)}
+.conf-val{font-size:11px;font-family:'IBM Plex Mono',monospace;color:#8898B0}
+.src{font-size:9px;font-family:'IBM Plex Mono',monospace;color:#5A6A80;margin-top:8px}
+.vs{display:flex;align-items:center;justify-content:center}
+.vs span{background:#0B0B0F;border:1.5px solid #2A2A38;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#7888A0}
+.warn{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.wchip{font-size:9px;padding:4px 10px;border-radius:5px;background:#201808;border:1px solid #3A3018;color:#F0C030;font-weight:500}
+</style>
+
+<div class="w">
+<div class="head">
+  <div class="brand">Enterprise Context Platform</div>
+  <div class="tag">resolve · trust · learn</div>
+</div>
+
+<div class="h1">Same question. Different answer.</div>
+<div class="sub">Full provenance on why</div>
+
+<div class="zone">
+  <div class="zone-label">Query</div>
+  <div class="qt">"Show me free cash flow yield for my tech book over the last 8 quarters, peer-adjusted"</div>
+</div>
+
+<div class="grid">
+  <div class="card left">
+    <div class="persona">
+      <div class="avatar">SC</div>
+      <div><div class="pname">Sarah Chen</div><div class="prole">portfolio_management</div></div>
+    </div>
+    <div class="row"><span class="rk">Definition</span><span class="rv">FCF (T12M, ex-SBC) / Mkt Cap</span></div>
+    <div class="row"><span class="rk">Scope</span><span class="rv">TECH_GROWTH_1 · 10 holdings</span></div>
+    <div class="row"><span class="rk">Peer method</span><span class="rv">Median · 14 precedents</span></div>
+    <div class="row"><span class="rk">Comparison</span><span class="rv">Spread in basis points</span></div>
+    <div class="big">+100 bps</div>
+    <div class="bigsub">vs peer median</div>
+    <div class="conf"><div class="conf-bar"></div><div class="conf-val">0.92</div></div>
+    <div class="src">Snowflake + Oracle + Portfolio API</div>
+  </div>
+  <div class="vs"><span>vs</span></div>
+  <div class="card right">
+    <div class="persona">
+      <div class="avatar">JD</div>
+      <div><div class="pname">John Doe</div><div class="prole">credit_research</div></div>
+    </div>
+    <div class="row"><span class="rk">Definition</span><span class="rv">FCF / Enterprise Value</span></div>
+    <div class="row"><span class="rk">Scope</span><span class="rv">CR_TECH · 25 names</span></div>
+    <div class="row"><span class="rk">Peer method</span><span class="rv">Mean · team standard</span></div>
+    <div class="row"><span class="rk">Comparison</span><span class="rv">Ratio (portfolio / peer)</span></div>
+    <div class="big">1.12x</div>
+    <div class="bigsub">peer mean</div>
+    <div class="conf"><div class="conf-bar"></div><div class="conf-val">0.88</div></div>
+    <div class="src">Snowflake + Bloomberg + Coverage DB</div>
+  </div>
+</div>
+
+<div class="warn">
+  <div class="wchip">⚠ Q2 2024 FCF restated</div>
+  <div class="wchip">⚠ NVDA fiscal year adjusted</div>
+  <div class="wchip">⚠ Peer group +CRM Q3 2024</div>
+</div>
+</div>
+</body>
+</html>

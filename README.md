@@ -24,6 +24,8 @@ Each of these is real and useful inside a bigger thing. The bigger thing is not 
 
 ## Architecture
 
+> Open [docs/diagrams/architecture.html](docs/diagrams/architecture.html) in a browser for the interactive version.
+
 ```
 AI System (Claude / GPT / Copilot / agent / workflow / app)
    │  MCP stdio  /  REST  /  OSI
@@ -117,6 +119,11 @@ For a richer, guided end-user flow (governance, entitlement, latency, provenance
 When no embedding key is set, the system logs a startup warning and degrades to ILIKE text search transparently. It never silently fakes a vector.
 
 ## Demo scenario
+
+> **"Show me free cash flow yield for my tech book over the last 8 quarters, peer-adjusted."**
+>
+> Same question, two users, two different correct answers — with full provenance on why.
+> Open [docs/diagrams/trace.html](docs/diagrams/trace.html) to see the animated resolution flow, or [docs/diagrams/comparison.html](docs/diagrams/comparison.html) for the side-by-side persona comparison.
 
 The seed models a Fortune 500 financial data company:
 

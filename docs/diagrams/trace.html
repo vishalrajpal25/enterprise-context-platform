@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ECP — Resolution Trace</title></head>
+<body style="background:#0B0B0F;display:flex;justify-content:center;padding:40px 20px">
+<h2 class="sr-only">ECP animated resolution trace with visible baseline</h2>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+.w{background:#0B0B0F;border-radius:14px;padding:24px;font-family:'Inter',sans-serif}
+.head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px}
+.brand{font-size:10px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#8898B0}
+.tag{font-size:10px;color:#5A6A80;font-style:italic}
+
+/* Query zone - visible from start, dims then lights */
+.zone{border:1.5px solid #1E1E28;border-radius:10px;background:#101016;padding:14px 18px;margin-bottom:14px;transition:all 0.8s}
+.zone.q-on{border-color:#3A5580;background:#101828}
+.zone.a-on{border-color:#2A6040;background:#0E1A14}
+.zone-label{font-size:9px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#4A5060;margin-bottom:8px;transition:color 0.8s}
+.zone.q-on .zone-label{color:#70A0D8}
+.zone.a-on .zone-label{color:#50C070}
+.qt{font-size:14px;color:#5A6070;line-height:1.6;font-style:italic;transition:color 0.8s}
+.zone.q-on .qt{color:#C0C8D8}
+
+/* ECP layer - visible from start with dim icons */
+.ecp-layer{border:1.5px solid #1E2838;border-radius:10px;background:#0E1018;padding:14px 16px 10px;margin-bottom:14px}
+.ecp-label{font-size:9px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#4A6080;margin-bottom:10px}
+
+.pipe{display:flex;align-items:center;gap:0;justify-content:center}
+.nd{display:flex;flex-direction:column;align-items:center;gap:4px}
+.dot{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #1E2838;background:#0E1018;transition:all 0.6s;font-size:17px;opacity:0.4}
+.nd.on .dot{opacity:1;transform:scale(1.1)}
+.nl{font-size:8px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:#3A4858;text-align:center;max-width:54px;line-height:1.3;transition:color 0.6s}
+.nd.on .nl{color:#C0C8D8}
+.con{width:22px;height:2px;background:#1E2838;border-radius:1px;transition:all 0.6s;flex-shrink:0}
+.con.on{background:#4A70A0}
+
+.nd.purple.on .dot{border-color:#9060F0;background:#201430;box-shadow:0 0 18px rgba(140,80,240,0.3)}
+.nd.blue.on .dot{border-color:#5090F0;background:#102040;box-shadow:0 0 18px rgba(80,140,240,0.3)}
+.nd.green.on .dot{border-color:#30D090;background:#0F2420;box-shadow:0 0 18px rgba(48,208,144,0.3)}
+.nd.amber.on .dot{border-color:#F0B020;background:#201808;box-shadow:0 0 18px rgba(240,176,32,0.3)}
+.nd.red.on .dot{border-color:#F06060;background:#201010;box-shadow:0 0 18px rgba(240,96,96,0.25)}
+.nd.cyan.on .dot{border-color:#20C8E0;background:#0F2028;box-shadow:0 0 18px rgba(32,200,224,0.3)}
+.nd.slate.on .dot{border-color:#8090A8;background:#141820;box-shadow:0 0 14px rgba(128,144,168,0.25)}
+
+.detail{font-size:11px;color:#0B0B0F;text-align:center;margin:10px 0 0;font-family:'IBM Plex Mono',monospace;line-height:1.7;transition:color 0.6s;min-height:20px}
+.detail.on{color:#8898B0}
+.detail .hi{color:#80C0F8;font-weight:500}
+.detail .wn{color:#F0C030}
+.detail .gn{color:#50E890}
+
+/* Answer zone - visible but empty-looking from start */
+.ans-inner{opacity:0.15;transition:opacity 0.8s}
+.zone.a-on .ans-inner{opacity:1}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{padding:12px 14px;border:1.5px solid #1E1E28;border-radius:8px;background:#101016;transition:all 0.8s}
+.zone.a-on .card.g{border-color:#2A6040;background:#0E1A14}
+.zone.a-on .card.y{border-color:#6A5020;background:#181208}
+.ct{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:#3A3A48;transition:color 0.8s}
+.zone.a-on .card.g .ct{color:#60E080}
+.zone.a-on .card.y .ct{color:#F0D050}
+.cv{font-size:11px;color:#2A2A38;line-height:1.6;transition:color 0.8s}
+.zone.a-on .card.g .cv{color:#90E0A8}
+.zone.a-on .card.y .cv{color:#F0D878}
+.num{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:20px}
+.zone.a-on .card.g .num{color:#60E888}
+.zone.a-on .card.y .num{color:#F8D848}
+.tg{font-size:8px;font-family:'IBM Plex Mono',monospace;padding:3px 8px;border-radius:5px;background:#101016;color:#2A2A38;display:inline-block;margin-top:7px;margin-right:3px;border:1px solid #1E1E28;transition:all 0.8s}
+.zone.a-on .card.g .tg{background:#0E1814;color:#60B070;border-color:#1E3828}
+.zone.a-on .card.y .tg{background:#181408;color:#C0A040;border-color:#3A3018}
+
+/* Estate zone - visible from start */
+.estate-zone{border:1.5px solid #1E1E28;border-radius:10px;background:#101016;padding:14px 18px}
+.estate-label{font-size:9px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#5A6878;margin-bottom:10px}
+.estate{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.chip{font-size:10px;font-weight:500;color:#5A6878;padding:5px 12px;border:1px solid #1E2430;border-radius:6px;background:#0E1016;transition:all 0.6s}
+.chip.lit{color:#B0D0F0;border-color:#4070A0;background:#101828;box-shadow:0 0 12px rgba(60,130,220,0.12)}
+</style>
+
+<div class="w">
+<div class="head">
+  <div class="brand">Enterprise Context Platform</div>
+  <div class="tag">resolve · trust · learn</div>
+</div>
+
+<div class="zone" id="qz">
+  <div class="zone-label">Query</div>
+  <div class="qt">"Show me free cash flow yield for my tech book over the last 8 quarters, peer-adjusted"</div>
+</div>
+
+<div class="ecp-layer">
+  <div class="ecp-label">ECP — Intelligent resolution engine</div>
+  <div class="pipe">
+    <div class="nd purple" id="n1"><div class="dot">🧠</div><div class="nl">Parse</div></div>
+    <div class="con" id="c1"></div>
+    <div class="nd blue" id="n2"><div class="dot">🔗</div><div class="nl">Resolve</div></div>
+    <div class="con" id="c2"></div>
+    <div class="nd green" id="n3"><div class="dot">🔍</div><div class="nl">Precedent</div></div>
+    <div class="con" id="c3"></div>
+    <div class="nd amber" id="n4"><div class="dot">⚠️</div><div class="nl">Tribal</div></div>
+    <div class="con" id="c4"></div>
+    <div class="nd red" id="n5"><div class="dot">🛡</div><div class="nl">Policy</div></div>
+    <div class="con" id="c5"></div>
+    <div class="nd cyan" id="n6"><div class="dot">⚡</div><div class="nl">Execute</div></div>
+    <div class="con" id="c6"></div>
+    <div class="nd slate" id="n7"><div class="dot">📋</div><div class="nl">Trace</div></div>
+  </div>
+  <div class="detail" id="det"></div>
+</div>
+
+<div class="zone" id="az">
+  <div class="zone-label">Answer</div>
+  <div class="ans-inner">
+    <div class="split">
+      <div class="card g" id="ca">
+        <div class="ct">Portfolio manager</div>
+        <div class="cv"><span class="num">+100 bps</span><br>vs peer median · confidence 0.92</div>
+        <div class="tg">Snowflake</div><div class="tg">Oracle</div><div class="tg">Portfolio API</div>
+      </div>
+      <div class="card y" id="cb">
+        <div class="ct">Credit research</div>
+        <div class="cv"><span class="num">1.12x</span><br>peer mean · confidence 0.88</div>
+        <div class="tg">Snowflake</div><div class="tg">Bloomberg</div><div class="tg">Coverage DB</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="estate-zone">
+  <div class="estate-label">Enterprise data estate</div>
+  <div class="estate">
+    <div class="chip" id="s1">Snowflake</div>
+    <div class="chip" id="s2">Databricks</div>
+    <div class="chip" id="s3">Oracle</div>
+    <div class="chip" id="s4">SAP</div>
+    <div class="chip" id="s5">Salesforce</div>
+    <div class="chip" id="s6">BigQuery</div>
+    <div class="chip" id="s7">PostgreSQL</div>
+    <div class="chip" id="s8">Delta Lake</div>
+    <div class="chip" id="s9">Iceberg</div>
+    <div class="chip" id="s10">Bloomberg</div>
+    <div class="chip" id="s11">REST APIs</div>
+    <div class="chip" id="s12">Mainframes</div>
+  </div>
+</div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const det=$('det');
+
+const timeline=[
+  // 1. Question lights up
+  {do:()=>{$('qz').classList.add('q-on')},d:1500},
+  // 2. Parse
+  {do:()=>{$('n1').classList.add('on');det.classList.add('on');det.innerHTML='<span class="hi">free_cash_flow_yield</span> · <span class="hi">my_tech_book</span> · <span class="hi">8_quarters</span> · <span class="hi">peer_adjusted</span>'},d:1400},
+  // 3. Resolve
+  {do:()=>{$('c1').classList.add('on');$('n2').classList.add('on');det.innerHTML='3 definitions → PM: <span class="hi">FCF (T12M, ex-SBC) / Market Cap</span>';$('s1').classList.add('lit');$('s3').classList.add('lit')},d:1400},
+  // 4. Precedent
+  {do:()=>{$('c2').classList.add('on');$('n3').classList.add('on');det.innerHTML='14 precedents → <span class="hi">median</span> · 8 → <span class="hi">spread bps</span>'},d:1300},
+  // 5. Tribal
+  {do:()=>{$('c3').classList.add('on');$('n4').classList.add('on');det.innerHTML='<span class="wn">⚠ Q2 restated</span> · <span class="wn">⚠ NVDA fiscal yr</span> · <span class="wn">⚠ Peer +CRM</span>'},d:1300},
+  // 6. Policy
+  {do:()=>{$('c4').classList.add('on');$('n5').classList.add('on');det.innerHTML='RBAC authorized · no redactions'},d:1000},
+  // 7. Execute
+  {do:()=>{$('c5').classList.add('on');$('n6').classList.add('on');det.innerHTML='Executing: <span class="hi">Snowflake</span> + <span class="hi">Oracle</span> + <span class="hi">Portfolio API</span>';$('s11').classList.add('lit');$('s10').classList.add('lit')},d:1400},
+  // 8. Trace + answer
+  {do:()=>{$('c6').classList.add('on');$('n7').classList.add('on');det.innerHTML='<span class="gn">✓ Complete</span> · 7 stores · 342ms · full provenance';$('az').classList.add('a-on')},d:4500},
+];
+
+function reset(){
+  document.querySelectorAll('.nd,.con').forEach(e=>e.classList.remove('on'));
+  $('qz').classList.remove('q-on');
+  $('az').classList.remove('a-on');
+  ['s1','s2','s3','s4','s5','s6','s7','s8','s9','s10','s11','s12'].forEach(c=>$(c).classList.remove('lit'));
+  det.innerHTML='';det.classList.remove('on');
+}
+
+async function run(){
+  while(true){
+    reset();
+    await new Promise(r=>setTimeout(r,1200));
+    for(const s of timeline){
+      s.do();
+      await new Promise(r=>setTimeout(r,s.d));
+    }
+  }
+}
+run();
+</script>
+</body>
+</html>
