@@ -91,6 +91,8 @@ python scripts/demo.py             # canonical resolution flow
 
 Open [docs/demo/index.html](docs/demo/index.html) directly in a browser, or serve it with `python -m http.server` from `docs/demo/` — it talks to `http://localhost:8080` by default. Pass `?api=https://your-deploy.example.com` to point it elsewhere.
 
+For a richer, guided end-user flow (governance, entitlement, latency, provenance, execution, feedback), use [docs/demo/studio.html](docs/demo/studio.html). A presenter-friendly script is in [docs/demo/DEMO-RUNBOOK.md](docs/demo/DEMO-RUNBOOK.md).
+
 > In **federation mode**, configure adapters in `config/adapters.yaml` (planned in v4 — see `docs/enterprise-context-platform-spec-v4.md` §1.3). In **standalone mode** (default for the demo), ECP uses its own Neo4j + PostgreSQL stores via `NativeAdapter`.
 
 ### Environment variables
