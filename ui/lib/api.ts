@@ -51,10 +51,17 @@ export const api = {
 
 // ─── Resolve with live/mock fallback ─────────────────────────────────
 
+// ─── Live vs mock strategy ──────────────────────────────────────────
+//
+// NEXT_PUBLIC_ECP_USE_LIVE controls whether the UI attempts the live
+// backend at all. Three modes:
+//   "1"    — try live, fall back to mock on failure
+//   "only" — live only, no fallback (error surfaces to user)
+//   unset  — mock only (default for offline demos)
+const USE_LIVE = process.env.NEXT_PUBLIC_ECP_USE_LIVE;
+
 export async function resolve(args: ResolveArgs): Promise<ResolveResponse> {
-  // The real API expects a single `concept` string + headers; we try it
-  // first. If anything goes wrong — network, CORS, 4xx, timeout — we
-  // silently fall through to the mock so the demo never breaks.
+  if (!USE_LIVE) return mockResolve(args);
   try {
     const body = JSON.stringify({
       concept: args.question,
@@ -69,36 +76,164 @@ export async function resolve(args: ResolveArgs): Promise<ResolveResponse> {
       "x-ecp-department": args.persona.department,
       "x-ecp-role": args.persona.role.toLowerCase(),
     };
-    const live = await fetchJson<ResolveResponse>(
+    const live = await fetchJson<Record<string, unknown>>(
       "/api/v1/resolve",
       { method: "POST", body, headers },
-      2000,
+      5000,
     );
-    // The live API's shape is close but not identical to the mock's.
-    // Normalize a few fields so the UI renders either cleanly.
-    return normalizeLive(live, args);
+    return adaptBackendResponse(live, args);
   } catch {
+    if (USE_LIVE === "only") throw new Error("Live API unreachable");
     return mockResolve(args);
   }
 }
 
-function normalizeLive(
-  live: Partial<ResolveResponse> & Record<string, unknown>,
+// ─── Backend → Studio shape adapter ─────────────────────────────────
+//
+// The live ECP backend (FastAPI / models.py) uses a different field
+// naming convention than the Studio UI (types.ts). This adapter maps
+// between them so the same components render both mock and live data.
+//
+// Backend shape differences:
+//   DAG steps:         step/method/reasoning/latency_ms  →  id/action/label/description/duration_ms/io
+//   ResolvedConcept:   resolved_id/resolved_name/definition  →  concept_id/canonical_name/plain_english
+//   TribalWarning:     description/impact/severity(high/medium/low)  →  headline/detail/severity(critical/warn/info)
+//   Top-level:         no headline, no latency_ms  →  headline, latency_ms
+
+const SEVERITY_MAP: Record<string, "info" | "warn" | "critical"> = {
+  high: "critical",
+  critical: "critical",
+  medium: "warn",
+  warn: "warn",
+  low: "info",
+  info: "info",
+};
+
+function adaptDAG(
+  raw: unknown[],
+): ResolveResponse["resolution_dag"] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((rawStep: unknown, i) => {
+    const s = rawStep as Record<string, unknown>;
+    return {
+    id: `s${i + 1}`,
+    action: (s.step as string) || "unknown",
+    label: formatStepLabel(s.step as string),
+    description: (s.reasoning as string) || "",
+    duration_ms: (s.latency_ms as number) || 0,
+    io: {
+      source: (s.method as string) || "engine",
+      query: JSON.stringify((s.input as Record<string, unknown>) || {}),
+      selected: (() => {
+        const out = s.output as Record<string, unknown> | undefined;
+        if (!out) return undefined;
+        return (out.resolved as string) || (out.label as string) || undefined;
+      })(),
+      output: (() => {
+        const out = s.output as Record<string, unknown> | undefined;
+        if (!out) return undefined;
+        const entries: Record<string, string> = {};
+        for (const [k, v] of Object.entries(out)) {
+          entries[k] = typeof v === "object" ? JSON.stringify(v) : String(v);
+        }
+        return entries;
+      })(),
+    },
+  };
+  });
+}
+
+function formatStepLabel(step: string): string {
+  if (!step) return "Unknown step";
+  // "parse_intent" → "Parse intent", "resolve_metric" → "Resolve metric"
+  return step.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}
+
+function adaptConcepts(
+  raw: unknown,
+): ResolveResponse["resolved_concepts"] {
+  if (!raw || typeof raw !== "object") return {};
+  const out: ResolveResponse["resolved_concepts"] = {};
+  for (const [key, val] of Object.entries(raw as Record<string, Record<string, unknown>>)) {
+    out[key] = {
+      concept_id: (val.resolved_id as string) || key,
+      canonical_name: (val.resolved_name as string) || key,
+      plain_english: (val.definition as string) || "",
+      department_variation: (val.concept_type as string) || undefined,
+      source: `ECP Knowledge Graph · confidence ${((val.confidence as number) || 0).toFixed(2)}`,
+    };
+  }
+  return out;
+}
+
+function adaptWarnings(raw: unknown): ResolveResponse["warnings"] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((w): w is Record<string, unknown> => !!w && typeof w === "object")
+    .map((w, i) => {
+      const sev = String(w.severity ?? "info").toLowerCase();
+      return {
+        id: (w.id as string) || `w_${i}`,
+        severity: SEVERITY_MAP[sev] ?? "info",
+        headline:
+          (w.headline as string) ||
+          (w.description as string) ||
+          "Warning",
+        detail:
+          (w.detail as string) ||
+          (w.impact as string) ||
+          "",
+        author: (w.author as string) || undefined,
+        captured_at: (w.captured_at as string) || undefined,
+      };
+    });
+}
+
+function adaptPrecedents(raw: unknown): ResolveResponse["precedents_used"] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((p: Record<string, unknown>) => ({
+    resolution_id: (p.query_id as string) || (p.resolution_id as string) || "",
+    query: (p.original_query as string) || (p.query as string) || "",
+    similarity: (p.similarity as number) || 0,
+    feedback: ((p.feedback as string) || "none") as "accepted" | "rejected" | "corrected" | "none",
+    user: (p.user as string) || "",
+  }));
+}
+
+function buildHeadline(
+  concepts: ResolveResponse["resolved_concepts"],
+  args: ResolveArgs,
+): string {
+  const parts: string[] = [];
+  if (concepts.metric) parts.push(concepts.metric.canonical_name);
+  if (concepts.scope) parts.push(concepts.scope.canonical_name);
+  if (concepts.dimension) parts.push(concepts.dimension.canonical_name);
+  if (concepts.time) parts.push(concepts.time.canonical_name);
+  if (concepts.adjustment) parts.push(`· ${concepts.adjustment.canonical_name}`);
+  if (parts.length === 0) return `Resolved for ${args.persona.name}`;
+  return `${parts.join(", ")} — resolved for ${args.persona.department}`;
+}
+
+function adaptBackendResponse(
+  live: Record<string, unknown>,
   args: ResolveArgs,
 ): ResolveResponse {
-  const dag = (live.resolution_dag || []) as ResolveResponse["resolution_dag"];
-  const latency =
-    typeof live.latency_ms === "number"
-      ? live.latency_ms
-      : dag.reduce((a, s) => a + (s.duration_ms || 0), 0) || 300;
+  const dag = adaptDAG((live.resolution_dag as unknown[]) || []);
+  const concepts = adaptConcepts(live.resolved_concepts);
+  const warnings = adaptWarnings(live.warnings);
+  const precedents = adaptPrecedents(live.precedents_used);
+  const latency = dag.reduce((a, s) => a + (s.duration_ms || 0), 0) || 300;
+
+  const statusRaw = (live.status as string) || "resolved";
+  const status: ResolveResponse["status"] =
+    statusRaw === "complete" ? "resolved" : (statusRaw as ResolveResponse["status"]);
+
   return {
     resolution_id:
       (live.resolution_id as string) || `live_${Date.now().toString(36)}`,
-    status: (live.status as ResolveResponse["status"]) || "resolved",
-    resolved_concepts:
-      (live.resolved_concepts as ResolveResponse["resolved_concepts"]) || {},
-    execution_plan:
-      (live.execution_plan as ResolveResponse["execution_plan"]) || [],
+    status,
+    resolved_concepts: concepts,
+    execution_plan: (live.execution_plan as ResolveResponse["execution_plan"]) || [],
     confidence: (live.confidence as ResolveResponse["confidence"]) || {
       definition: 0.8,
       data_quality: 0.8,
@@ -107,17 +242,13 @@ function normalizeLive(
       completeness: 0.8,
       overall: 0.8,
     },
-    warnings: (live.warnings as ResolveResponse["warnings"]) || [],
-    precedents_used:
-      (live.precedents_used as ResolveResponse["precedents_used"]) || [],
+    warnings,
+    precedents_used: precedents,
     resolution_dag: dag,
-    policies_evaluated:
-      (live.policies_evaluated as string[]) || [],
+    policies_evaluated: (live.policies_evaluated as string[]) || [],
     access_granted: (live.access_granted as boolean) ?? true,
     filtered_concepts: (live.filtered_concepts as string[]) || [],
-    headline:
-      (live.headline as string) ||
-      `Resolved "${args.question}" for ${args.persona.name}`,
+    headline: buildHeadline(concepts, args),
     latency_ms: latency,
   };
 }

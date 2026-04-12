@@ -19,6 +19,7 @@ Output shape is the contract consumed by src/semantic/cube_executor.py:
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -150,6 +151,40 @@ def resolve(
             "resolved_at": (now or datetime.utcnow()).isoformat(),
         }
     else:
+        # Handle "last_N_quarters" pattern (e.g., last_8_quarters)
+        m = re.match(r"last_(\d+)_quarters?", time_id)
+        if m:
+            n = int(m.group(1))
+            # End of the most recent completed quarter
+            cur_fy = _fy_for(today, sm)
+            cur_q = _quarter_index(today, sm)
+            # Step back to last completed quarter
+            if cur_q == 1:
+                end_fy, end_q = cur_fy - 1, 4
+            else:
+                end_fy, end_q = cur_fy, cur_q - 1
+            _, end_date = _quarter_bounds(end_fy, end_q, sm)
+
+            # Walk back N-1 more quarters to find start
+            start_fy, start_q = end_fy, end_q
+            for _ in range(n - 1):
+                if start_q == 1:
+                    start_fy -= 1
+                    start_q = 4
+                else:
+                    start_q -= 1
+            start_date, _ = _quarter_bounds(start_fy, start_q, sm)
+
+            start_fy_label = label_template.format(end_year=start_fy)
+            end_fy_label = label_template.format(end_year=end_fy)
+            return {
+                "dimension": fiscal.dimension,
+                "range": [start_date.isoformat(), end_date.isoformat()],
+                "label": f"Last {n} quarters (Q{start_q}-{start_fy_label} to Q{end_q}-{end_fy_label})",
+                "fiscal_year": end_fy_label,
+                "fiscal_quarter": f"Q{end_q}",
+                "resolved_at": (now or datetime.utcnow()).isoformat(),
+            }
         return None
 
     start, end = _quarter_bounds(fy, q, sm)

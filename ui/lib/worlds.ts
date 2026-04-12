@@ -110,7 +110,7 @@ export const WORLDS: World[] = [
         question:
           "Show me free cash flow yield for my tech book over the last 8 quarters, peer-adjusted",
         watch_for:
-          "Five FCF definitions across FactSet, S&P, GAAP, management-adjusted, and the house model. ECP picks the fund's canonical and flags the rest.",
+          "Five FCF definitions across vendor feeds, GAAP, management-adjusted, and the house model. ECP picks the fund's canonical and flags the rest.",
       },
       {
         id: "tech-book-membership",
@@ -264,8 +264,8 @@ export const WORLDS: World[] = [
   },
 ];
 
-export const DEFAULT_WORLD_ID = "metro";
-export const DEFAULT_SCENARIO_ID = "apac-revenue";
+export const DEFAULT_WORLD_ID = "pine-ridge";
+export const DEFAULT_SCENARIO_ID = "fcf-yield";
 export const DEFAULT_INDUSTRY_ID = "finance";
 
 /**

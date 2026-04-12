@@ -30,7 +30,7 @@ export function Warnings({ warnings }: { warnings: TribalWarning[] }) {
 
 function Warning({ w }: { w: TribalWarning }) {
   const [open, setOpen] = useState(false);
-  const Icon = ICON[w.severity];
+  const Icon = ICON[w.severity] ?? Info;
   return (
     <button
       onClick={() => setOpen((o) => !o)}
