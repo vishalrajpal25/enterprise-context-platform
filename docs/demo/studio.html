@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ECP Demo Studio</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --surface: #ffffff;
+      --surface-soft: #fafbfd;
+      --line: #d7deea;
+      --text: #0f172a;
+      --muted: #526079;
+      --brand: #0f3b72;
+      --brand-strong: #0b2d58;
+      --brand-soft: #e9f0fa;
+      --ok: #166a49;
+      --ok-bg: #eaf8f0;
+      --warn: #8a5f00;
+      --warn-bg: #fff7ea;
+      --bad: #9d1f1f;
+      --bad-bg: #fff1f1;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 20px rgba(15, 23, 42, 0.07);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    }
+    .frame {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 20px;
+      display: grid;
+      gap: 16px;
+    }
+    .hero {
+      background: linear-gradient(120deg, var(--brand-strong), var(--brand));
+      color: #edf4ff;
+      border-radius: 14px;
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .hero h1 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: 0.2px;
+    }
+    .hero p {
+      margin: 6px 0 0;
+      color: #dce8fb;
+      font-size: 13px;
+      max-width: 760px;
+      line-height: 1.45;
+    }
+    .pills {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .pill {
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 4px 9px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #e8f0ff;
+      background: rgba(255, 255, 255, 0.13);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    @media (max-width: 1080px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .card-head {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-soft);
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+    }
+    .card-body { padding: 14px; }
+    .step {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      margin-bottom: 10px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .step:last-child { margin-bottom: 0; }
+    .step-title {
+      background: #f9fbff;
+      border-bottom: 1px solid var(--line);
+      padding: 8px 10px;
+      font-size: 12px;
+      color: #30445f;
+      font-weight: 700;
+    }
+    .step-inner { padding: 10px; }
+    label {
+      display: block;
+      margin: 7px 0 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 10px;
+      background: #fff;
+      color: var(--text);
+      font-size: 13px;
+    }
+    textarea { min-height: 90px; resize: vertical; }
+    .inline {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    button {
+      border: 1px solid #c8d5e8;
+      background: #f5f8fc;
+      color: #284667;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.primary {
+      border-color: var(--brand-strong);
+      background: var(--brand);
+      color: #fff;
+    }
+    button.soft {
+      border-color: #bfd0e8;
+      background: var(--brand-soft);
+      color: #1f4c82;
+    }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    @media (max-width: 960px) {
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    .kpi {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: #fff;
+    }
+    .kpi .name {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .kpi .value {
+      margin-top: 4px;
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .bar-wrap {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      padding: 10px;
+      margin-bottom: 12px;
+    }
+    .bar-row {
+      display: grid;
+      grid-template-columns: 150px 1fr 52px;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      margin-bottom: 7px;
+    }
+    .bar-row:last-child { margin-bottom: 0; }
+    .track {
+      height: 8px;
+      border-radius: 999px;
+      background: #e8edf5;
+      overflow: hidden;
+    }
+    .fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4f79ae, #0f3b72);
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    @media (max-width: 980px) {
+      .info-grid { grid-template-columns: 1fr; }
+    }
+    .info {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      padding: 10px;
+      min-height: 150px;
+    }
+    .info h3 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    ul.clean {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      line-height: 1.42;
+    }
+    .msg {
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      border: 1px solid;
+    }
+    .msg.ok { color: var(--ok); background: var(--ok-bg); border-color: #bce6ce; }
+    .msg.warn { color: var(--warn); background: var(--warn-bg); border-color: #f0d9ac; }
+    .msg.bad { color: var(--bad); background: var(--bad-bg); border-color: #f1c5c5; }
+    .msg.neutral { color: #304a6a; background: #edf2fa; border-color: #cfdae9; }
+    .json {
+      border: 1px solid #1c2c43;
+      background: #122037;
+      color: #d8e6ff;
+      border-radius: 10px;
+      padding: 10px;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.44;
+      max-height: 270px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <header class="hero">
+      <div>
+        <h1>ECP Demo Studio</h1>
+        <p>Three steps: connect, ask, run. Outputs are grouped into business meaning, governance, and performance.</p>
+      </div>
+      <div id="heroPills" class="pills"></div>
+    </header>
+
+    <section class="layout">
+      <aside class="card">
+        <div class="card-head">Guided Flow</div>
+        <div class="card-body">
+          <article class="step">
+            <div class="step-title">1) Connect</div>
+            <div class="step-inner">
+              <label for="apiBase">API base URL</label>
+              <input id="apiBase" value="http://localhost:8080" />
+              <label for="apiKey">API key (optional)</label>
+              <input id="apiKey" placeholder="x-ecp-api-key" />
+              <div class="btn-row">
+                <button id="healthBtn" class="soft">Health</button>
+                <button id="readyBtn" class="soft">Readiness</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="step">
+            <div class="step-title">2) Ask</div>
+            <div class="step-inner">
+              <label for="scenario">Scenario</label>
+              <select id="scenario"></select>
+              <label for="question">Business question</label>
+              <textarea id="question"></textarea>
+              <div class="inline">
+                <div>
+                  <label for="department">Department</label>
+                  <select id="department">
+                    <option>finance</option>
+                    <option>sales</option>
+                    <option>operations</option>
+                    <option>product</option>
+                    <option>customer_success</option>
+                    <option>compliance</option>
+                    <option>research</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="role">Role</label>
+                  <select id="role">
+                    <option>analyst</option>
+                    <option>manager</option>
+                    <option>executive</option>
+                    <option>auditor</option>
+                    <option>steward</option>
+                  </select>
+                </div>
+              </div>
+              <label for="userId">User ID</label>
+              <input id="userId" value="demo_user_1" />
+            </div>
+          </article>
+
+          <article class="step">
+            <div class="step-title">3) Run</div>
+            <div class="step-inner">
+              <div class="btn-row">
+                <button id="resolveBtn" class="primary">Resolve</button>
+                <button id="searchBtn">Search</button>
+                <button id="executeBtn" disabled>Execute</button>
+                <button id="provenanceBtn" disabled>Provenance</button>
+                <button id="acceptBtn" disabled>Accept</button>
+                <button id="rejectBtn" disabled>Reject</button>
+              </div>
+            </div>
+          </article>
+        </div>
+      </aside>
+
+      <main class="card">
+        <div class="card-head">Results</div>
+        <div class="card-body">
+          <div id="message" class="msg neutral">Run Health first, then Resolve a scenario.</div>
+
+          <div class="kpis">
+            <div class="kpi"><div class="name">Latency</div><div id="kLatency" class="value">-</div></div>
+            <div class="kpi"><div class="name">Confidence</div><div id="kConfidence" class="value">-</div></div>
+            <div class="kpi"><div class="name">DAG steps</div><div id="kDag" class="value">-</div></div>
+            <div class="kpi"><div class="name">Warnings</div><div id="kWarnings" class="value">-</div></div>
+          </div>
+
+          <section class="bar-wrap">
+            <div id="bars"></div>
+          </section>
+
+          <section class="info-grid">
+            <article class="info">
+              <h3>Meaning</h3>
+              <ul id="meaningList" class="clean"></ul>
+            </article>
+            <article class="info">
+              <h3>Governance</h3>
+              <ul id="govList" class="clean"></ul>
+            </article>
+          </section>
+
+          <section class="info-grid">
+            <article class="info">
+              <h3>Performance Trace</h3>
+              <ul id="perfList" class="clean"></ul>
+            </article>
+            <article class="info">
+              <h3>Warnings / Precedents</h3>
+              <ul id="warnList" class="clean"></ul>
+            </article>
+          </section>
+
+          <pre id="jsonOut" class="json">// JSON output appears here for technical validation.</pre>
+        </div>
+      </main>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let lastResolutionId = "";
+
+    const scenarios = [
+      { label: "Finance: APAC revenue", question: "What was APAC revenue last quarter?", department: "finance", role: "analyst" },
+      { label: "Sales: APAC revenue", question: "What was APAC revenue last quarter?", department: "sales", role: "analyst" },
+      { label: "Finance: revenue vs budget", question: "Compare APAC revenue to budget last quarter", department: "finance", role: "manager" },
+      { label: "Governance: retention by region", question: "Show customer retention for strategic accounts by region", department: "compliance", role: "auditor" },
+      { label: "Search context assets", question: "Search: revenue", department: "finance", role: "steward" }
+    ];
+
+    function setHeroPills(items) {
+      $("heroPills").innerHTML = items.map((x) => `<span class="pill">${x}</span>`).join("");
+    }
+
+    function setMessage(kind, text) {
+      const el = $("message");
+      el.className = `msg ${kind}`;
+      el.textContent = text;
+    }
+
+    function setList(id, rows) {
+      const el = $(id);
+      el.innerHTML = rows.length ? rows.map((r) => `<li>${r}</li>`).join("") : '<li class="muted">No data.</li>';
+    }
+
+    function kpi(id, value) {
+      $(id).textContent = value;
+    }
+
+    function headers() {
+      const h = {
+        "content-type": "application/json",
+        "x-ecp-user-id": $("userId").value || "demo_user",
+        "x-ecp-department": $("department").value || "",
+        "x-ecp-role": $("role").value || "analyst"
+      };
+      const key = $("apiKey").value.trim();
+      if (key) h["x-ecp-api-key"] = key;
+      return h;
+    }
+
+    async function call(path, method = "GET", body = null) {
+      const t0 = performance.now();
+      const base = $("apiBase").value.replace(/\/+$/, "");
+      const res = await fetch(base + path, {
+        method,
+        headers: headers(),
+        body: body ? JSON.stringify(body) : undefined
+      });
+      const latency = Math.round(performance.now() - t0);
+      const raw = await res.text();
+      let data = raw;
+      try { data = JSON.parse(raw); } catch (_) {}
+      return { ok: res.ok, status: res.status, data, latency };
+    }
+
+    function renderBars(conf = {}) {
+      const defs = [
+        ["definition", "Definition"],
+        ["data_quality", "Data quality"],
+        ["temporal_validity", "Temporal"],
+        ["authorization", "Authorization"],
+        ["completeness", "Completeness"],
+        ["overall", "Overall"]
+      ];
+      $("bars").innerHTML = defs.map(([k, name]) => {
+        const pct = Math.max(0, Math.min(100, Math.round((Number(conf[k] || 0)) * 100)));
+        return `
+          <div class="bar-row">
+            <div>${name}</div>
+            <div class="track"><div class="fill" style="width:${pct}%"></div></div>
+            <div>${pct}%</div>
+          </div>`;
+      }).join("");
+    }
+
+    function renderResolve(payload, latency, httpStatus) {
+      const body = payload || {};
+      const concepts = body.resolved_concepts || {};
+      const dag = Array.isArray(body.resolution_dag) ? body.resolution_dag : [];
+      const warnings = Array.isArray(body.warnings) ? body.warnings : [];
+      const policies = Array.isArray(body.policies_evaluated) ? body.policies_evaluated : [];
+      const filtered = Array.isArray(body.filtered_concepts) ? body.filtered_concepts : [];
+      const precedents = Array.isArray(body.precedents_used) ? body.precedents_used : [];
+
+      kpi("kLatency", `${latency} ms`);
+      kpi("kConfidence", `${Math.round((Number(body.confidence?.overall || 0)) * 100)}%`);
+      kpi("kDag", String(dag.length));
+      kpi("kWarnings", String(warnings.length));
+      renderBars(body.confidence || {});
+
+      setList("meaningList", Object.entries(concepts).map(([kind, v]) =>
+        `<strong>${kind}</strong>: ${v.resolved_name || v.raw_value || "-"} <span class="muted">(${v.resolved_id || "n/a"})</span>`
+      ));
+      setList("govList", [
+        `Access granted: <strong>${String(body.access_granted)}</strong>`,
+        `Policies: <strong>${policies.length ? policies.join(", ") : "none"}</strong>`,
+        `Filtered concepts: <strong>${filtered.length ? filtered.join(", ") : "none"}</strong>`,
+        `Identity: <strong>${$("userId").value}</strong> / ${$("department").value} / ${$("role").value}`
+      ]);
+      setList("perfList", dag.slice(0, 8).map((s) =>
+        `<strong>${s.step || "step"}</strong>: ${s.method || "-"} <span class="muted">(${Math.round(s.latency_ms || 0)} ms)</span>`
+      ));
+      setList("warnList", [
+        ...warnings.map((w) => `<strong>${w.severity || "info"}</strong>: ${w.description || ""}`),
+        ...precedents.slice(0, 2).map((p) => `<strong>precedent</strong>: ${Math.round((p.similarity || 0) * 100)}% similarity`)
+      ]);
+
+      $("jsonOut").textContent = JSON.stringify(body, null, 2);
+      lastResolutionId = body.resolution_id || "";
+      const canUse = !!lastResolutionId;
+      $("executeBtn").disabled = !canUse;
+      $("provenanceBtn").disabled = !canUse;
+      $("acceptBtn").disabled = !canUse;
+      $("rejectBtn").disabled = !canUse;
+
+      const statusWord = body.status || "unknown";
+      const kind = !httpStatus || httpStatus >= 400 ? "bad" : (body.access_granted ? "ok" : "warn");
+      setMessage(kind, `Resolve ${statusWord}. HTTP ${httpStatus}. Latency ${latency} ms.`);
+      setHeroPills([
+        `HTTP ${httpStatus}`,
+        `Status ${statusWord}`,
+        `Access ${body.access_granted ? "granted" : "restricted"}`,
+        `Latency ${latency} ms`
+      ]);
+    }
+
+    async function doHealth() {
+      const r = await call("/health");
+      $("jsonOut").textContent = JSON.stringify(r.data, null, 2);
+      setMessage(r.ok ? "ok" : "bad", `Health ${r.ok ? "ok" : "failed"}. HTTP ${r.status}.`);
+      setHeroPills([`HTTP ${r.status}`, `Mode ${r.data?.mode || "-"}`, `Demo ${String(r.data?.demo_mode)}`, `Latency ${r.latency} ms`]);
+      setList("govList", [
+        `Mode: <strong>${r.data?.mode || "-"}</strong>`,
+        `Demo mode: <strong>${String(r.data?.demo_mode)}</strong>`,
+        `Embeddings: <strong>${r.data?.embedding_available ? "available" : "ILIKE fallback"}</strong>`
+      ]);
+    }
+
+    async function doReady() {
+      const r = await call("/health/ready");
+      const checks = r.data?.checks || {};
+      $("jsonOut").textContent = JSON.stringify(r.data, null, 2);
+      setList("govList", Object.keys(checks).map((k) => `${k}: <strong>${checks[k] ? "ready" : "down"}</strong>`));
+      setMessage(r.ok ? "ok" : "warn", `Readiness ${r.data?.status || "unknown"}. HTTP ${r.status}.`);
+      setHeroPills([`HTTP ${r.status}`, `Readiness ${r.data?.status || "unknown"}`, `Latency ${r.latency} ms`]);
+    }
+
+    async function doResolve() {
+      const concept = $("question").value.trim();
+      if (!concept) return;
+      const r = await call("/api/v1/resolve", "POST", { concept, user_context: null });
+      renderResolve(r.data, r.latency, r.status);
+    }
+
+    async function doSearch() {
+      const raw = $("question").value.trim();
+      const query = raw.toLowerCase().startsWith("search:") ? raw.slice(7).trim() : (raw || "revenue");
+      const r = await call("/api/v1/search", "POST", { query, asset_types: [], limit: 8 });
+      $("jsonOut").textContent = JSON.stringify(r.data, null, 2);
+      setList("meaningList", (r.data?.results || []).map((x) =>
+        `<strong>${x.type || "asset"}</strong>: ${x.name || x.id || "-"} <span class="muted">(score ${Number(x.score || 0).toFixed(2)})</span>`
+      ));
+      setMessage(r.ok ? "ok" : "bad", `Search returned ${(r.data?.results || []).length} results. HTTP ${r.status}.`);
+      setHeroPills([`HTTP ${r.status}`, `Search results ${(r.data?.results || []).length}`, `Latency ${r.latency} ms`]);
+    }
+
+    async function doExecute() {
+      if (!lastResolutionId) return;
+      const r = await call("/api/v1/execute", "POST", { resolution_id: lastResolutionId, parameters: {} });
+      $("jsonOut").textContent = JSON.stringify(r.data, null, 2);
+      setMessage(r.ok ? "ok" : "bad", `Execute ${r.ok ? "completed" : "failed"}. HTTP ${r.status}.`);
+      setHeroPills([`HTTP ${r.status}`, "Action execute", `Latency ${r.latency} ms`]);
+    }
+
+    async function doProvenance() {
+      if (!lastResolutionId) return;
+      const r = await call(`/api/v1/provenance/${lastResolutionId}`);
+      $("jsonOut").textContent = JSON.stringify(r.data, null, 2);
+      setMessage(r.ok ? "ok" : "bad", `Provenance ${r.ok ? "loaded" : "failed"}. HTTP ${r.status}.`);
+      setHeroPills([`HTTP ${r.status}`, "Action provenance", `Latency ${r.latency} ms`]);
+    }
+
+    async function doFeedback(value) {
+      if (!lastResolutionId) return;
+      const r = await call("/api/v1/feedback", "POST", {
+        resolution_id: lastResolutionId,
+        feedback: value,
+        correction_details: value === "rejected" ? "Demo rejection note." : ""
+      });
+      $("jsonOut").textContent = JSON.stringify(r.data, null, 2);
+      setMessage(r.ok ? "ok" : "bad", `Feedback '${value}' recorded. HTTP ${r.status}.`);
+      setHeroPills([`HTTP ${r.status}`, `Feedback ${value}`, `Latency ${r.latency} ms`]);
+    }
+
+    function applyScenario(idx) {
+      const s = scenarios[idx];
+      if (!s) return;
+      $("question").value = s.question;
+      $("department").value = s.department;
+      $("role").value = s.role;
+    }
+
+    function init() {
+      scenarios.forEach((s, i) => {
+        const opt = document.createElement("option");
+        opt.value = String(i);
+        opt.textContent = s.label;
+        $("scenario").appendChild(opt);
+      });
+      applyScenario(0);
+      renderBars({});
+      setList("meaningList", []);
+      setList("govList", []);
+      setList("perfList", []);
+      setList("warnList", []);
+      setHeroPills(["Not connected"]);
+
+      $("scenario").addEventListener("change", (e) => applyScenario(Number(e.target.value)));
+      $("healthBtn").addEventListener("click", doHealth);
+      $("readyBtn").addEventListener("click", doReady);
+      $("resolveBtn").addEventListener("click", doResolve);
+      $("searchBtn").addEventListener("click", doSearch);
+      $("executeBtn").addEventListener("click", doExecute);
+      $("provenanceBtn").addEventListener("click", doProvenance);
+      $("acceptBtn").addEventListener("click", () => doFeedback("accepted"));
+      $("rejectBtn").addEventListener("click", () => doFeedback("rejected"));
+    }
+
+    init();
+  </script>
+</body>
+</html>
