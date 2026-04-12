@@ -1,10 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeftRight, Users } from "lucide-react";
+import clsx from "clsx";
+import { ArrowLeftRight, Users, ChevronDown } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { ConfidenceRing } from "./ConfidenceRing";
 import { DAG } from "./DAG";
+import { ResolutionGraph } from "./ResolutionGraph";
+import { SourceLineage } from "./SourceLineage";
 import { Warnings } from "./Warnings";
 import { Governance } from "./Governance";
 import { Meaning } from "./Meaning";
@@ -47,110 +50,82 @@ export function ResolutionStory() {
       transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
       className="space-y-6"
     >
-      {/* Headline — no tile, this is the hero */}
-      <section className="bg-surface dark:bg-surface-dark border border-hairline dark:border-hairline-dark px-7 py-7">
-        <div className="text-label uppercase tracking-[0.14em] text-accent font-semibold mb-3">
-          Answer
-        </div>
-        <div className="flex items-start gap-8">
-          <div className="flex-1 min-w-0">
-            <h2 className="serif text-[34px] leading-[42px] font-semibold tracking-tight text-ink dark:text-ink-dark">
-              {current.headline}
-            </h2>
-            <div className="mt-4 flex items-center gap-3 text-label">
-              <span className="text-muted">
-                Resolved in{" "}
-                <span className="text-ink dark:text-ink-dark tabular-nums font-semibold">
-                  {current.latency_ms}ms
-                </span>
-              </span>
-              <span className="text-hairline-strong">·</span>
-              <span className="mono text-muted">{current.resolution_id}</span>
-            </div>
+      {/* ── Answer headline ────────────────────────────────────── */}
+      <section className="bg-surface dark:bg-surface-dark border border-hairline dark:border-hairline-dark px-6 py-5">
+        <div className="flex items-baseline justify-between gap-4 mb-2">
+          <div className="text-label uppercase tracking-[0.14em] text-accent font-semibold">
+            Resolved
           </div>
-          <ConfidenceRing
-            value={current.confidence.overall}
-            label="confidence"
-          />
+          <div className="flex items-center gap-3 text-label text-muted">
+            <span className="font-semibold tabular-nums text-ink dark:text-ink-dark">
+              {Math.round(current.confidence.overall * 100)}%
+            </span>
+            <span className="text-hairline-strong">·</span>
+            <span className="tabular-nums">{current.latency_ms}ms</span>
+            <span className="text-hairline-strong">·</span>
+            <span className="font-mono text-[11px]">{current.resolution_id}</span>
+          </div>
         </div>
+        <h2 className="text-[17px] leading-[24px] font-medium text-ink dark:text-ink-dark">
+          {current.headline}
+        </h2>
       </section>
 
-      {/* Comparison ribbon */}
-      {previous && previousRole && (
-        <Tile tone="accent" label="Same question · different answer">
-          <div className="flex items-start gap-3">
-            <ArrowLeftRight
-              size={16}
-              className="text-accent mt-1 shrink-0"
-            />
-            <div className="flex-1 text-body">
-              <div className="text-muted">
-                As{" "}
-                <span className="text-ink dark:text-ink-dark font-medium">
-                  {previousRole}
-                </span>
-                : {previous.headline}
-              </div>
-              <div className="mt-1.5 text-muted">
-                As{" "}
-                <span className="text-ink dark:text-ink-dark font-medium">
-                  {persona.role}
-                </span>
-                : {current.headline}
-              </div>
-              <div className="mt-3 text-label text-muted">
-                The question didn&apos;t change. The context did.
-              </div>
-            </div>
-            <button
-              onClick={clearComparison}
-              className="text-label text-muted hover:text-ink dark:hover:text-ink-dark"
-            >
-              dismiss
-            </button>
-          </div>
+      {/* ── Resolution flow — full width ────────────────────── */}
+      {current.resolution_dag.length > 0 && (
+        <Tile tone="accent" label="Resolution flow" right={
+          <span className="text-[12px] font-mono text-muted tabular-nums">
+            {current.resolution_dag.length} steps
+          </span>
+        }>
+          <ResolutionGraph steps={current.resolution_dag} />
         </Tile>
       )}
 
-      {/* DAG — its own tile, accent-cued (this is the signature moment) */}
-      <Tile tone="accent" label="Decision flow">
-        <DAG steps={current.resolution_dag} />
-      </Tile>
-
-      {/* Two-column grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1.45fr_1fr] gap-6">
-        <div className="space-y-6">
-          <Tile label="Meaning">
-            <Meaning concepts={current.resolved_concepts} />
-          </Tile>
-          {current.warnings.length > 0 && (
-            <Tile
-              tone="warn"
-              label={`Tribal knowledge · ${current.warnings.length}`}
-            >
-              <Warnings warnings={current.warnings} />
-            </Tile>
-          )}
-        </div>
-        <div className="space-y-6">
+      {/* ── Meaning + warnings — two column ─────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6">
+        <Tile label="Meaning">
+          <Meaning concepts={current.resolved_concepts} />
+        </Tile>
+        {current.warnings.length > 0 && (
           <Tile
-            tone={current.access_granted ? "neutral" : "danger"}
-            label="Governance"
+            tone="warn"
+            label={`Tribal knowledge · ${current.warnings.length}`}
           >
-            <Governance
-              access_granted={current.access_granted}
-              policies={current.policies_evaluated}
-              filtered={current.filtered_concepts}
-            />
+            <Warnings warnings={current.warnings} />
           </Tile>
-          {current.precedents_used.length > 0 && (
-            <Tile
-              label={`Precedents · ${current.precedents_used.length}`}
-            >
-              <Precedents precedents={current.precedents_used} />
-            </Tile>
-          )}
-        </div>
+        )}
+      </div>
+
+      {/* ── Source lineage ───────────────────────────────────── */}
+      {current.execution_plan.length > 0 && (
+        <Tile label="Source lineage">
+          <SourceLineage plan={current.execution_plan} />
+        </Tile>
+      )}
+
+      {/* ── Decision trace (collapsible) ────────────────────── */}
+      <DetailSection label={`Decision trace · ${current.resolution_dag.length} steps`}>
+        <DAG steps={current.resolution_dag} />
+      </DetailSection>
+
+      {/* ── Governance + precedents ──────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Tile
+          tone={current.access_granted ? "neutral" : "danger"}
+          label="Governance"
+        >
+          <Governance
+            access_granted={current.access_granted}
+            policies={current.policies_evaluated}
+            filtered={current.filtered_concepts}
+          />
+        </Tile>
+        {current.precedents_used.length > 0 && (
+          <Tile label={`Precedents · ${current.precedents_used.length}`}>
+            <Precedents precedents={current.precedents_used} />
+          </Tile>
+        )}
       </div>
 
       {/* Aha nudge */}
@@ -185,6 +160,36 @@ export function ResolutionStory() {
         </motion.div>
       )}
     </motion.div>
+  );
+}
+
+function DetailSection({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="border border-hairline dark:border-hairline-dark bg-surface dark:bg-surface-dark">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-5 py-3 hover:bg-subtle dark:hover:bg-subtle-dark transition-colors"
+      >
+        <span className="text-label uppercase tracking-[0.12em] font-semibold text-muted">
+          {label}
+        </span>
+        <ChevronDown
+          size={16}
+          className={clsx(
+            "text-muted transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open && <div className="px-5 pb-5">{children}</div>}
+    </section>
   );
 }
 

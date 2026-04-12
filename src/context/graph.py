@@ -46,7 +46,9 @@ class GraphClient:
         WHERE (n:Metric OR n:GlossaryTerm OR n:Entity)
           AND (toLower(coalesce(n.name, '')) CONTAINS toLower($raw_value)
                OR toLower(coalesce(n.canonical_name, '')) CONTAINS toLower($raw_value)
-               OR toLower(coalesce(n.id, '')) CONTAINS toLower($raw_value))
+               OR toLower(coalesce(n.id, '')) CONTAINS toLower($raw_value)
+               OR (toLower(coalesce(n.domain, '')) = toLower($concept_type)
+                   AND toLower(coalesce(n.id, '')) CONTAINS toLower($raw_value)))
         OPTIONAL MATCH (n)-[:HAS_VARIATION {context: $department}]->(v)
         WITH n, v,
              toLower(coalesce(n.name, n.canonical_name, n.id, '')) AS lname,
@@ -75,7 +77,7 @@ class GraphClient:
         LIMIT 5
         """
         async with self._driver.session() as session:
-            result = await session.run(query, raw_value=raw_value, department=department)
+            result = await session.run(query, raw_value=raw_value, department=department, concept_type=concept_type)
             rows = [dict(record) async for record in result]
             for r in rows:
                 if r.get("score") is not None and r["score"] > 1.0:
@@ -121,6 +123,17 @@ class GraphClient:
         """
         async with self._driver.session() as session:
             result = await session.run(query, concept_ids=concept_ids)
+            return [dict(record) async for record in result]
+
+    async def get_metric_sources(self, metric_id: str) -> list[dict]:
+        """Get cross-platform source lineage for a metric (tables and platforms)."""
+        query = """
+        MATCH (m {id: $metric_id})-[:COMPUTED_FROM]->(c:Column)-[:BELONGS_TO]->(t:Table)
+        RETURN DISTINCT t.name as table_name, t.platform as platform,
+               c.name as column_name, t.id as table_id
+        """
+        async with self._driver.session() as session:
+            result = await session.run(query, metric_id=metric_id)
             return [dict(record) async for record in result]
 
     async def get_dimension_values(self, dimension_id: str, metric_context: dict = None) -> dict:

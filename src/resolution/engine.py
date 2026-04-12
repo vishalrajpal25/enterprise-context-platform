@@ -241,6 +241,10 @@ class ResolutionEngine:
                 confidence=0.95,
                 reasoning="Comparison is an intent flag, not a graph concept.",
             )
+        if concept_type == "scope":
+            return await self._resolve_scope_concept(raw_value, user_ctx)
+        if concept_type == "adjustment":
+            return await self._resolve_adjustment_concept(raw_value, user_ctx)
 
         results = await self.graph.find_concept(concept_type, raw_value, user_ctx.department)
 
@@ -299,6 +303,91 @@ class ResolutionEngine:
                 f"Resolved via fiscal calendar (start month "
                 f"{(await self.registry._load_fiscal_context()).fiscal_year_start_month}). "
                 f"Computed live from current wall clock."
+            ),
+        )
+
+    async def _resolve_scope_concept(
+        self, raw_value: str, user_ctx: UserContext
+    ) -> ResolvedConcept:
+        """Resolve a scope concept (e.g., 'book') via graph lookup with user context.
+
+        Scope concepts like 'my book' resolve differently per department:
+        portfolio_management -> portfolio (user's holdings),
+        sales -> book of business (user's accounts).
+        """
+        results = await self.graph.find_concept("scope", raw_value, user_ctx.department)
+        if not results:
+            # Fallback: try as a generic Entity lookup
+            results = await self.graph.find_concept("entity", raw_value, user_ctx.department)
+
+        if not results:
+            return ResolvedConcept(
+                concept_type="scope",
+                raw_value=raw_value,
+                resolved_id=f"unresolved_{raw_value}",
+                resolved_name=raw_value,
+                definition=f"No scope definition found for '{raw_value}'",
+                confidence=0.3,
+                reasoning="No matching scope concept in knowledge graph",
+            )
+
+        best = results[0]
+        # Enrich with user-specific scope info
+        scope_detail = (
+            f"Scoped to {user_ctx.user_id}'s {best['name'].lower()}"
+            if user_ctx.user_id != "anonymous"
+            else best.get("definition", "")
+        )
+        return ResolvedConcept(
+            concept_type="scope",
+            raw_value=raw_value,
+            resolved_id=best["id"],
+            resolved_name=best["name"],
+            definition=scope_detail,
+            confidence=best.get("score", 0.8),
+            reasoning=(
+                f"Graph match score={best.get('score', 0.0):.2f}, "
+                f"user={user_ctx.user_id}, department={user_ctx.department}. "
+                f"'book' → '{best['name']}' in {user_ctx.department} context."
+            ),
+        )
+
+    async def _resolve_adjustment_concept(
+        self, raw_value: str, user_ctx: UserContext
+    ) -> ResolvedConcept:
+        """Resolve an adjustment concept (e.g., 'peer_adjusted') via graph lookup.
+
+        Adjustment methods differ by department:
+        equity_research -> ratio (company / peer mean),
+        portfolio_management -> spread in bps (company - peer median).
+        """
+        results = await self.graph.find_concept("adjustment", raw_value, user_ctx.department)
+        if not results:
+            results = await self.graph.find_concept("entity", raw_value, user_ctx.department)
+
+        if not results:
+            return ResolvedConcept(
+                concept_type="adjustment",
+                raw_value=raw_value,
+                resolved_id=f"unresolved_{raw_value}",
+                resolved_name=raw_value,
+                definition=f"No adjustment definition found for '{raw_value}'",
+                confidence=0.3,
+                reasoning="No matching adjustment concept in knowledge graph",
+            )
+
+        best = results[0]
+        return ResolvedConcept(
+            concept_type="adjustment",
+            raw_value=raw_value,
+            resolved_id=best["id"],
+            resolved_name=best["name"],
+            definition=best.get("definition", ""),
+            confidence=best.get("score", 0.8),
+            reasoning=(
+                f"Graph match score={best.get('score', 0.0):.2f}, "
+                f"department={user_ctx.department}. "
+                f"Adjustment method selected for {user_ctx.department} context."
             ),
         )
 
@@ -446,10 +535,34 @@ class ResolutionEngine:
                     "label", resolved["time"].resolved_name
                 )
 
+        # Gather source lineage for provenance
+        sources = await self.graph.get_metric_sources(metric_concept.resolved_id)
+
+        params: dict = {"measures": [metric_info["measure"]], "filters": filters}
+        if sources:
+            params["sources"] = sources
+
+        # Add scope filter if present
+        if "scope" in resolved:
+            scope = resolved["scope"]
+            params["scope"] = {
+                "type": scope.resolved_id,
+                "name": scope.resolved_name,
+            }
+
+        # Add adjustment config if present
+        if "adjustment" in resolved:
+            adj = resolved["adjustment"]
+            params["adjustment"] = {
+                "type": adj.resolved_id,
+                "name": adj.resolved_name,
+                "definition": adj.definition,
+            }
+
         steps.append(ExecutionStep(
             target=metric_info.get("semantic_layer_ref", ""),
             method="semantic_layer_call",
-            parameters={"measures": [metric_info["measure"]], "filters": filters},
+            parameters=params,
         ))
 
         return steps

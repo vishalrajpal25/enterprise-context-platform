@@ -1,20 +1,21 @@
 "use client";
 
-import { ArrowUp, Loader2 } from "lucide-react";
-import { useRef, useEffect } from "react";
+import { ArrowUp, Loader2, Pencil } from "lucide-react";
+import { useRef, useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
 import clsx from "clsx";
 
 /**
- * Chat-style input. Single-row by default, auto-grows on new lines.
- * The scenario pre-fills the question; the user can edit or replace it.
- * Submit button is integrated into the trailing edge.
+ * Question input with clear edit affordance.
+ * Shows the pre-filled question as readable text with a pencil icon.
+ * Click anywhere on the text or the pencil to focus the editor.
  */
 export function Composer() {
   const { question, setQuestion, run, status } = useStore();
   const loading = status === "loading";
   const canRun = !loading && !!question.trim();
   const ref = useRef<HTMLTextAreaElement>(null);
+  const [focused, setFocused] = useState(false);
 
   // Auto-grow textarea as content changes.
   useEffect(() => {
@@ -25,19 +26,38 @@ export function Composer() {
   }, [question]);
 
   return (
-    <div className="relative">
+    <div>
+      {/* Label */}
+      <div className="flex items-center gap-2 mb-2">
+        <label className="text-label uppercase tracking-[0.12em] font-semibold text-muted">
+          Question
+        </label>
+        <button
+          onClick={() => ref.current?.focus()}
+          className="text-muted hover:text-ink transition-colors"
+          aria-label="Edit question"
+        >
+          <Pencil size={12} />
+        </button>
+      </div>
+
       {/* Input surface */}
       <div
+        onClick={() => ref.current?.focus()}
         className={clsx(
-          "flex items-end gap-3 bg-surface border transition-colors",
-          "border-hairline-strong focus-within:border-ink",
-          "px-5 py-3.5",
+          "flex items-end gap-3 bg-surface border-2 transition-colors cursor-text",
+          focused
+            ? "border-accent shadow-[0_0_0_1px_rgba(31,77,216,0.15)]"
+            : "border-hairline hover:border-hairline-strong",
+          "px-5 py-3",
         )}
       >
         <textarea
           ref={ref}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -47,37 +67,33 @@ export function Composer() {
           rows={1}
           placeholder="Ask a business question…"
           className={clsx(
-            "flex-1 resize-none bg-transparent serif text-[20px] leading-[28px]",
+            "flex-1 resize-none bg-transparent text-[16px] leading-[24px]",
             "text-ink placeholder:text-muted/60 placeholder:italic",
             "focus:outline-none overflow-hidden",
           )}
-          style={{ minHeight: "28px" }}
+          style={{ minHeight: "24px" }}
         />
 
         <button
-          onClick={() => run()}
+          onClick={(e) => {
+            e.stopPropagation();
+            run();
+          }}
           disabled={!canRun}
           className={clsx(
-            "shrink-0 w-9 h-9 flex items-center justify-center transition-all",
+            "shrink-0 w-8 h-8 flex items-center justify-center transition-all",
             canRun
-              ? "bg-ink text-canvas hover:bg-accent"
+              ? "bg-accent text-white hover:bg-ink"
               : "bg-elevated text-muted cursor-not-allowed",
           )}
           aria-label="Resolve question"
         >
           {loading ? (
-            <Loader2 size={16} className="animate-spin" />
+            <Loader2 size={14} className="animate-spin" />
           ) : (
-            <ArrowUp size={16} strokeWidth={2.5} />
+            <ArrowUp size={14} strokeWidth={2.5} />
           )}
         </button>
-      </div>
-
-      {/* Hint below */}
-      <div className="mt-2 text-label text-muted">
-        <kbd className="font-mono">Enter</kbd> to resolve ·{" "}
-        <kbd className="font-mono">Shift</kbd>+
-        <kbd className="font-mono">Enter</kbd> for a new line
       </div>
     </div>
   );

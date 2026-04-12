@@ -360,6 +360,215 @@ ASSETS = [
             }
         }
     },
+    # --- FCF YIELD GLOSSARY TERMS ---
+    {
+        "id": "gl_fcf_yield",
+        "type": "glossary_term",
+        "content": {
+            "canonical_name": "free_cash_flow_yield",
+            "display_name": "Free Cash Flow Yield",
+            "definition": "Free cash flow divided by market capitalization, expressed as a percentage",
+            "variations": [
+                {
+                    "context": "equity_research",
+                    "name": "fcf_yield_equity",
+                    "definition": "Free cash flow divided by Enterprise Value (EV), preferred for cross-capital-structure comparisons",
+                    "formula": "FCF / Enterprise Value"
+                },
+                {
+                    "context": "credit_research",
+                    "name": "fcf_yield_credit",
+                    "definition": "Free cash flow divided by Enterprise Value (EV), used for leverage-adjusted analysis",
+                    "formula": "FCF / Enterprise Value"
+                },
+                {
+                    "context": "portfolio_management",
+                    "name": "fcf_yield_pm",
+                    "definition": "Free cash flow (trailing 12 months, ex-SBC) divided by Market Cap",
+                    "formula": "(OCF - CapEx - SBC) / Market Cap (trailing 12mo)"
+                }
+            ],
+            "synonyms": ["fcf yield", "free cash flow yield", "cash flow yield", "fcf/ev", "fcf/mcap"],
+            "owner": "equity_research",
+            "last_reviewed": "2026-03-20"
+        }
+    },
+    {
+        "id": "gl_book",
+        "type": "glossary_term",
+        "content": {
+            "canonical_name": "book",
+            "display_name": "Book",
+            "definition": "A collection of positions or accounts managed by a user",
+            "variations": [
+                {
+                    "context": "portfolio_management",
+                    "name": "book_portfolio",
+                    "definition": "Portfolio — the set of holdings assigned to a portfolio manager",
+                    "formula": "SELECT holdings FROM portfolio_system WHERE pm_id = :user_id"
+                },
+                {
+                    "context": "sales",
+                    "name": "book_of_business",
+                    "definition": "Book of business — the set of client accounts owned by a sales rep",
+                    "formula": "SELECT accounts FROM crm WHERE rep_id = :user_id"
+                }
+            ],
+            "synonyms": ["my book", "portfolio", "book of business", "holdings"],
+            "owner": "portfolio_operations",
+            "last_reviewed": "2026-02-10"
+        }
+    },
+    {
+        "id": "gl_peer_adjusted",
+        "type": "glossary_term",
+        "content": {
+            "canonical_name": "peer_adjusted",
+            "display_name": "Peer-Adjusted",
+            "definition": "A metric normalized relative to a defined peer group benchmark",
+            "variations": [
+                {
+                    "context": "equity_research",
+                    "name": "peer_adjusted_ratio",
+                    "definition": "Ratio of company metric to peer group mean — values above 1.0 indicate outperformance",
+                    "formula": "company_metric / mean(peer_group_metrics)"
+                },
+                {
+                    "context": "portfolio_management",
+                    "name": "peer_adjusted_spread",
+                    "definition": "Spread in basis points vs peer group median — positive = outperformance",
+                    "formula": "(company_metric - median(peer_group_metrics)) * 10000"
+                }
+            ],
+            "synonyms": ["peer adjusted", "peer-adjusted", "relative to peers", "vs peers", "peer comparison"],
+            "owner": "equity_research",
+            "last_reviewed": "2026-03-15"
+        }
+    },
+    # --- FCF YIELD METRICS ---
+    {
+        "id": "mt_fcf_yield",
+        "type": "metric_definition",
+        "content": {
+            "name": "fcf_yield",
+            "semantic_layer_ref": "cube.finance.CashFlow.fcfYield",
+            "measure": "CashFlow.fcfYield",
+            "definition": "Free cash flow yield — FCF divided by market cap or enterprise value depending on context",
+            "certification_tier": 1,
+            "owner": "equity_research@company.com",
+            "source_table": "analytics.finance.fact_cash_flow"
+        }
+    },
+    # --- FCF TRIBAL KNOWLEDGE ---
+    {
+        "id": "tk_fcf_restatement_q2_2024",
+        "type": "tribal_knowledge",
+        "content": {
+            "type": "known_issue",
+            "scope": {
+                "tables": ["finance.fact_cash_flow"],
+                "dimensions": {"fiscal_period": ["2024-Q2"]}
+            },
+            "description": "Q2 2024 FCF data was restated in September 2024 after audit adjustment",
+            "reason": "Capitalised lease reclassification under ASC 842 changed operating cash flow by ~$180M",
+            "impact": "Pre-restatement Q2 2024 FCF figures are materially understated",
+            "workaround": "Only use data loaded after 2024-09-15; fact_cash_flow.version >= 3 has corrected figures",
+            "discovered_by": "external_audit@company.com",
+            "discovered_date": "2024-09-12",
+            "verified": True,
+            "active": True,
+            "severity": "high"
+        }
+    },
+    {
+        "id": "tk_nvda_fiscal_year",
+        "type": "tribal_knowledge",
+        "content": {
+            "type": "known_change",
+            "scope": {
+                "tables": ["finance.fact_cash_flow"],
+                "dimensions": {"ticker": ["NVDA"]}
+            },
+            "description": "NVDA changed fiscal year end in 2024; calendar-adjusted figures are in fact_cash_flow",
+            "reason": "NVIDIA shifted fiscal year end from January to January (52/53-week convention changed)",
+            "impact": "Raw quarterly comparisons for NVDA across FY boundary are misleading without calendar adjustment",
+            "workaround": "Use calendar-adjusted columns (amount_cal_adjusted) in fact_cash_flow for NVDA time-series",
+            "discovered_by": "quant_research@company.com",
+            "discovered_date": "2024-03-01",
+            "verified": True,
+            "active": True,
+            "severity": "medium"
+        }
+    },
+    {
+        "id": "tk_peer_group_crm",
+        "type": "tribal_knowledge",
+        "content": {
+            "type": "known_change",
+            "scope": {
+                "dimensions": {"peer_group": ["tech_growth"]}
+            },
+            "description": "Peer group gained CRM (Salesforce) in Q3 2024 when it crossed $100B market cap threshold",
+            "reason": "Tech growth peer group criteria: market cap > $100B, revenue growth > 10% YoY",
+            "impact": "Peer group metrics before Q3 2024 exclude CRM; after Q3 2024 include CRM. Affects median/mean benchmarks.",
+            "workaround": "For consistent time-series comparisons, use frozen peer group composition or note the composition change",
+            "discovered_by": "portfolio_analytics@company.com",
+            "discovered_date": "2024-08-15",
+            "verified": True,
+            "active": True,
+            "severity": "medium"
+        }
+    },
+    # --- FCF DATA CONTRACTS ---
+    {
+        "id": "dc_fact_cash_flow",
+        "type": "data_contract",
+        "content": {
+            "name": "fact_cash_flow",
+            "owner": {"team": "finance_data_engineering", "contact": "fin-data@company.com"},
+            "source": {
+                "platform": "snowflake",
+                "database": "analytics",
+                "schema": "finance",
+                "table": "fact_cash_flow"
+            },
+            "sla": {
+                "freshness_hours": 12,
+                "availability_pct": 99.5,
+                "completeness_pct": 99.0
+            },
+            "quality_rules": [
+                {"rule": "ticker IS NOT NULL", "severity": "critical"},
+                {"rule": "operating_cash_flow IS NOT NULL", "severity": "critical"},
+                {"rule": "capex <= 0", "severity": "warning"},
+                {"rule": "fiscal_quarter IN ('Q1','Q2','Q3','Q4')", "severity": "warning"}
+            ]
+        }
+    },
+    {
+        "id": "dc_dim_market_cap",
+        "type": "data_contract",
+        "content": {
+            "name": "dim_market_cap",
+            "owner": {"team": "market_data_engineering", "contact": "mktdata@company.com"},
+            "source": {
+                "platform": "oracle",
+                "database": "market_data",
+                "schema": "reference",
+                "table": "dim_market_cap"
+            },
+            "sla": {
+                "freshness_hours": 6,
+                "availability_pct": 99.9,
+                "completeness_pct": 99.5
+            },
+            "quality_rules": [
+                {"rule": "ticker IS NOT NULL", "severity": "critical"},
+                {"rule": "market_cap > 0", "severity": "critical"},
+                {"rule": "as_of_date IS NOT NULL", "severity": "critical"}
+            ]
+        }
+    },
     # --- CALENDAR CONFIG ---
     # NOTE: this asset deliberately contains NO frozen "current quarter" or
     # "last_quarter_date_range" fields. The fiscal resolver
@@ -460,6 +669,70 @@ CREATE (nr)-[:HAS_KNOWN_ISSUE]->(tk2)
 CREATE (nr)-[:HAS_KNOWN_ISSUE]->(tk3)
 CREATE (gr)-[:HAS_KNOWN_ISSUE]->(tk1)
 CREATE (gr)-[:HAS_KNOWN_ISSUE]->(tk3)
+
+// --- FCF Yield nodes ---
+CREATE (fcf:Metric {id: 'fcf_yield', name: 'Free Cash Flow Yield', description: 'Free cash flow yield — FCF divided by market cap or enterprise value depending on context', semantic_layer_ref: 'cube.finance.CashFlow.fcfYield', asset_registry_id: 'mt_fcf_yield', certification_tier: 1, owner: 'equity_research@company.com'})
+
+CREATE (gl_fcf:GlossaryTerm {id: 'free_cash_flow_yield', canonical_name: 'free_cash_flow_yield', definition: 'Free cash flow divided by market capitalization, expressed as a percentage', asset_registry_id: 'gl_fcf_yield'})
+CREATE (gl_fcf_eq:GlossaryTerm {id: 'fcf_yield_equity', canonical_name: 'fcf_yield_equity', definition: 'FCF divided by Enterprise Value (EV), preferred for cross-capital-structure comparisons', context: 'equity_research'})
+CREATE (gl_fcf_cr:GlossaryTerm {id: 'fcf_yield_credit', canonical_name: 'fcf_yield_credit', definition: 'FCF divided by Enterprise Value (EV), used for leverage-adjusted analysis', context: 'credit_research'})
+CREATE (gl_fcf_pm:GlossaryTerm {id: 'fcf_yield_pm', canonical_name: 'fcf_yield_pm', definition: 'FCF (trailing 12 months, ex-SBC) divided by Market Cap', context: 'portfolio_management'})
+
+CREATE (book:Entity {id: 'book', name: 'Book', domain: 'scope', description: 'A collection of positions or accounts managed by a user'})
+CREATE (book_pm:Entity {id: 'book_portfolio', name: 'Portfolio', domain: 'scope', description: 'The set of holdings assigned to a portfolio manager'})
+CREATE (book_sales:Entity {id: 'book_of_business', name: 'Book of Business', domain: 'scope', description: 'The set of client accounts owned by a sales rep'})
+
+CREATE (peer:Entity {id: 'peer_adjusted', name: 'Peer-Adjusted', domain: 'adjustment', description: 'A metric normalized relative to a defined peer group benchmark'})
+CREATE (peer_eq:Entity {id: 'peer_adjusted_ratio', name: 'Peer-Adjusted (Ratio)', domain: 'adjustment', description: 'Ratio of company metric to peer group mean — above 1.0 = outperformance'})
+CREATE (peer_pm:Entity {id: 'peer_adjusted_spread', name: 'Peer-Adjusted (Spread bps)', domain: 'adjustment', description: 'Spread in basis points vs peer group median — positive = outperformance'})
+
+CREATE (peer_group:Entity {id: 'peer_group_tech_growth', name: 'Tech Growth Peer Group', domain: 'peer_group', description: 'Large-cap tech growth companies: market cap > $100B, revenue growth > 10% YoY', values: ['AAPL','MSFT','GOOGL','AMZN','NVDA','META','CRM','ADBE','ORCL']})
+
+// FCF source tables (cross-platform!)
+CREATE (t_cf:Table {id: 'analytics.finance.fact_cash_flow', schema_name: 'finance', name: 'fact_cash_flow', platform: 'snowflake'})
+CREATE (t_mcap:Table {id: 'market_data.reference.dim_market_cap', schema_name: 'reference', name: 'dim_market_cap', platform: 'oracle'})
+CREATE (c_ocf:Column {id: 'fact_cash_flow.operating_cash_flow', table_id: 'analytics.finance.fact_cash_flow', name: 'operating_cash_flow', data_type: 'DECIMAL(18,2)'})
+CREATE (c_capex:Column {id: 'fact_cash_flow.capex', table_id: 'analytics.finance.fact_cash_flow', name: 'capex', data_type: 'DECIMAL(18,2)'})
+CREATE (c_mcap:Column {id: 'dim_market_cap.market_cap', table_id: 'market_data.reference.dim_market_cap', name: 'market_cap', data_type: 'DECIMAL(18,2)'})
+
+// FCF tribal knowledge
+CREATE (tk_fcf_restate:TribalKnowledge {id: 'tk_fcf_restatement_q2_2024', asset_registry_id: 'tk_fcf_restatement_q2_2024', description: 'Q2 2024 FCF data was restated in September 2024 after audit adjustment', severity: 'high', active: true, impact: 'Pre-restatement Q2 2024 FCF figures are materially understated', workaround: 'Only use data loaded after 2024-09-15; fact_cash_flow.version >= 3'})
+CREATE (tk_nvda:TribalKnowledge {id: 'tk_nvda_fiscal_year', asset_registry_id: 'tk_nvda_fiscal_year', description: 'NVDA changed fiscal year end in 2024; use calendar-adjusted figures', severity: 'medium', active: true, impact: 'Raw quarterly NVDA comparisons across FY boundary are misleading', workaround: 'Use amount_cal_adjusted column in fact_cash_flow for NVDA'})
+CREATE (tk_crm:TribalKnowledge {id: 'tk_peer_group_crm', asset_registry_id: 'tk_peer_group_crm', description: 'Peer group gained CRM in Q3 2024 when it crossed $100B market cap', severity: 'medium', active: true, impact: 'Peer benchmarks before/after Q3 2024 have different composition', workaround: 'Use frozen peer group composition or note the change'})
+
+// --- FCF relationships ---
+CREATE (fcf)-[:DEFINED_BY]->(gl_fcf)
+CREATE (gl_fcf)-[:HAS_VARIATION {context: 'equity_research'}]->(gl_fcf_eq)
+CREATE (gl_fcf)-[:HAS_VARIATION {context: 'credit_research'}]->(gl_fcf_cr)
+CREATE (gl_fcf)-[:HAS_VARIATION {context: 'portfolio_management'}]->(gl_fcf_pm)
+CREATE (gl_fcf_eq)-[:DESCRIBES]->(fcf)
+CREATE (gl_fcf_cr)-[:DESCRIBES]->(fcf)
+CREATE (gl_fcf_pm)-[:DESCRIBES]->(fcf)
+
+// Cross-platform lineage: Snowflake (cash flow) + Oracle (market cap)
+CREATE (fcf)-[:COMPUTED_FROM {logic: 'operating_cash_flow - capex'}]->(c_ocf)
+CREATE (fcf)-[:COMPUTED_FROM {logic: 'capex (negative = spending)'}]->(c_capex)
+CREATE (fcf)-[:COMPUTED_FROM {logic: 'market_cap for yield denominator'}]->(c_mcap)
+CREATE (c_ocf)-[:BELONGS_TO]->(t_cf)
+CREATE (c_capex)-[:BELONGS_TO]->(t_cf)
+CREATE (c_mcap)-[:BELONGS_TO]->(t_mcap)
+
+// Book / scope relationships
+CREATE (book)-[:HAS_VARIATION {context: 'portfolio_management'}]->(book_pm)
+CREATE (book)-[:HAS_VARIATION {context: 'sales'}]->(book_sales)
+
+// Peer-adjusted relationships
+CREATE (peer)-[:HAS_VARIATION {context: 'equity_research'}]->(peer_eq)
+CREATE (peer)-[:HAS_VARIATION {context: 'portfolio_management'}]->(peer_pm)
+
+// Tribal knowledge affects
+CREATE (tk_fcf_restate)-[:AFFECTS]->(fcf)
+CREATE (tk_nvda)-[:AFFECTS]->(fcf)
+CREATE (tk_crm)-[:AFFECTS]->(peer)
+CREATE (tk_crm)-[:AFFECTS]->(peer_group)
+CREATE (fcf)-[:HAS_KNOWN_ISSUE]->(tk_fcf_restate)
+CREATE (fcf)-[:HAS_KNOWN_ISSUE]->(tk_nvda)
+CREATE (peer)-[:HAS_KNOWN_ISSUE]->(tk_crm)
             """)
 
             result = await session.run("MATCH (n) RETURN count(n) as count")

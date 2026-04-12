@@ -589,7 +589,7 @@ const RECIPES: Record<Key, ResolutionRecipe> = {
         concept_id: "metric.fcf.house",
         canonical_name: "Free Cash Flow (house definition)",
         plain_english:
-          "FactSet standardized FCF with stock-based comp added back. Approved by Elena, 2024-11-02.",
+          "Vendor-standardized FCF with stock-based comp added back. Approved by Elena, 2024-11-02.",
         department_variation: "pm",
         source: "Pine Ridge house glossary",
       },
@@ -605,7 +605,7 @@ const RECIPES: Record<Key, ResolutionRecipe> = {
         concept_id: "peer_set.internal_overrides",
         canonical_name: "Internal peer sets",
         plain_english:
-          "FactSet default peers with 14 manual overrides maintained by J. Kim (senior analyst).",
+          "Vendor default peers with 14 manual overrides maintained by J. Kim (senior analyst).",
         source: "peer_overrides.xlsx · last updated 2026-02-14",
       },
     },
@@ -621,7 +621,7 @@ const RECIPES: Record<Key, ResolutionRecipe> = {
         action: "find_concept",
         label: "Look up 'free cash flow'",
         description:
-          "5 definitions: FactSet, S&P Capital IQ, GAAP, management-adjusted, Pine Ridge house. Elena's role → house definition (FactSet + SBC add-back).",
+          "5 definitions: vendor feed, data provider, GAAP, management-adjusted, Pine Ridge house. Elena's role → house definition (vendor-standardized + SBC add-back).",
         duration_ms: 134,
       },
       {
@@ -642,7 +642,7 @@ const RECIPES: Record<Key, ResolutionRecipe> = {
         action: "resolve_peers",
         label: "Resolve peer sets",
         description:
-          "FactSet default + 14 manual overrides from peer_overrides.xlsx (DDOG, SNOW, CRWD, ...).",
+          "Vendor default + 14 manual overrides from peer_overrides.xlsx (DDOG, SNOW, CRWD, ...).",
         duration_ms: 72,
       },
       {
@@ -1171,7 +1171,7 @@ export async function mockResolve(args: ResolveArgs): Promise<ResolveResponse> {
  */
 function synthesize(args: ResolveArgs): ResolutionRecipe {
   return {
-    headline: `Resolved "${args.question}" for ${args.persona.name} (${args.persona.role})`,
+    headline: `Resolved "${args.question}"`,
     resolved_concepts: {
       query: {
         concept_id: "synthetic.query",
