@@ -123,11 +123,39 @@ CREATE TABLE IF NOT EXISTS osi_sync_log (
 """
 
 
+MIGRATE_VECTOR_DIM = f"""
+-- Drop and recreate vector tables if embedding dimension changed.
+-- This is safe because embeddings are re-seeded on every seed_data run.
+DO $$
+DECLARE
+    current_dim INTEGER;
+BEGIN
+    -- Check asset_vectors dimension
+    SELECT atttypmod INTO current_dim
+    FROM pg_attribute
+    WHERE attrelid = 'asset_vectors'::regclass
+      AND attname = 'embedding'
+      AND NOT attisdropped;
+
+    IF current_dim IS NOT NULL AND current_dim != {EMBEDDING_DIM} THEN
+        RAISE NOTICE 'Embedding dim changed (% → %), recreating vector tables', current_dim, {EMBEDDING_DIM};
+        DROP TABLE IF EXISTS asset_vectors CASCADE;
+        DROP TABLE IF EXISTS resolution_embeddings CASCADE;
+    END IF;
+EXCEPTION
+    WHEN undefined_table THEN NULL;  -- Tables don't exist yet
+END $$;
+"""
+
+
 async def main():
     conn = await asyncpg.connect(POSTGRES_DSN)
     try:
+        # Migrate vector dimension if it changed
+        await conn.execute(MIGRATE_VECTOR_DIM)
+        # Create all tables (IF NOT EXISTS is safe for non-vector tables)
         await conn.execute(SCHEMA)
-        print("Schema created successfully.")
+        print(f"Schema created successfully (embedding_dim={EMBEDDING_DIM}).")
     finally:
         await conn.close()
 
