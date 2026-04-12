@@ -145,7 +145,7 @@ The seed models a Fortune 500 financial data company:
 | `GET  /api/v1/provenance/{id}` | Full DAG, stores queried, definitions selected, execution plan |
 | `GET  /health` | `{status, mode, demo_mode, embedding_available}` |
 | `GET  /health/ready` | All backend ping checks |
-| `GET  /admin/keep-warm` | Cheap ping for UptimeRobot — keeps free-tier backends alive |
+| `GET  /admin/keep-warm` | Cheap endpoint for uptime monitors |
 
 ## Tests
 
@@ -156,25 +156,6 @@ PYTHONPATH=. .venv/bin/python -m pytest tests/ -q
 ```
 
 CI runs ruff, pytest, the golden eval suite (13 reference queries), a security smoke (IDOR + API key), and a load smoke (p95 budget). See [.github/workflows/ci.yml](.github/workflows/ci.yml).
-
-## Free public deploy
-
-Hosting target: $0/month. The whole stack stays alive because a single UptimeRobot HTTP check pinging `/admin/keep-warm` every 5 minutes touches every backend.
-
-1. **Render free** for the web service ([Dockerfile](Dockerfile) + [render.yaml](render.yaml))
-2. **Neon free** Postgres (includes pgvector). Connection string → `ECP_POSTGRES_DSN` (with `sslmode=require`)
-3. **Neo4j AuraDB Free**. Connection string → `ECP_NEO4J_URI` (`neo4j+s://…`)
-4. **Upstash Redis free** *(optional, currently unused at runtime)*
-5. **Voyage AI** — sign up at voyageai.com (no card), set `ECP_VOYAGE_API_KEY`. Or use OpenAI by setting `ECP_EMBEDDING_PROVIDER=openai` + `ECP_OPENAI_API_KEY`.
-6. **Anthropic** — set `ECP_ANTHROPIC_API_KEY` to enable intelligent mode.
-7. **UptimeRobot** — add an HTTP check on `https://<your-render>.onrender.com/admin/keep-warm` every 5 minutes.
-
-First-deploy bootstrap (one-time):
-1. Set `ECP_BOOTSTRAP_DB=true` and `ECP_AUTO_SEED_DEMO=true`, redeploy
-2. Verify `https://<service>.onrender.com/health` returns `demo_mode: true`
-3. Flip both flags back to `false`
-
-Then point [docs/demo/index.html](docs/demo/index.html) at the live URL by opening it with `?api=https://<service>.onrender.com`, or fork the repo and host the page from GitHub Pages.
 
 ## License
 
