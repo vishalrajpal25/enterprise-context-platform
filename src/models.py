@@ -48,12 +48,29 @@ class TribalWarning(BaseModel):
     workaround: str = ""
 
 
+class PrecedentCorrection(BaseModel):
+    """Detail of a correction precedent ready to apply as a hard override.
+
+    Carries enough context for the engine to swap the resolved concept
+    AND for the DAG step to record a human-readable reasoning string.
+    """
+    concept_type: str
+    preferred_resolved_id: str
+    preferred_resolved_name: str = ""
+    department: str = ""
+    corrected_at: str = ""             # ISO 8601, formatted by PrecedentEngine
+    note: str = ""
+
+
 class Precedent(BaseModel):
     query_id: str
     similarity: float
     original_query: str
     feedback: str                      # "accepted", "corrected", "rejected", "pending"
     influence: str                     # How this precedent affects current resolution
+    # Populated when the precedent represents an actionable correction
+    # propagating into the current resolution as a hard override.
+    correction: PrecedentCorrection | None = None
 
 
 class ExecutionStep(BaseModel):
@@ -112,10 +129,27 @@ class FeedbackStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class CorrectionDetail(BaseModel):
+    """Structured correction payload for `feedback == corrected`.
+
+    A structured correction lets the Precedent Engine apply the user's
+    fix as a hard override on similar future queries. `concept_type` and
+    `preferred_resolved_id` are required for the override to fire; `note`
+    is freeform context shown in the audit trail.
+    """
+    concept_type: str = Field(min_length=1, max_length=50)
+    preferred_resolved_id: str = Field(min_length=1, max_length=200)
+    preferred_resolved_name: str = Field(default="", max_length=200)
+    note: str = Field(default="", max_length=2000)
+
+
 class FeedbackRequest(BaseModel):
     resolution_id: str
     feedback: FeedbackStatus
-    correction_details: str = Field(default="", max_length=4000)
+    # Either a freeform string (legacy) or a structured CorrectionDetail.
+    # Structured corrections enable hard-override propagation; string
+    # corrections are kept for backward compatibility but do not override.
+    correction_details: str | CorrectionDetail = Field(default="")
 
 
 # ============================================================
