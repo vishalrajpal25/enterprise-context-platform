@@ -17,6 +17,7 @@ from src.models import (
     Confidence,
     ExecutionStep,
     ParsedIntent,
+    Precedent,
     ResolutionDAGStep,
     ResolvedConcept,
     ResolveRequest,
@@ -111,10 +112,13 @@ class ResolutionEngine:
             ))
 
             # ========================================
-            # Step 4: Find precedents (intelligent mode only)
+            # Step 4: Find precedents (both modes — corrections are
+            # human-verified facts, not optional learning signal)
             # ========================================
-            precedents = []
-            if self.mode == ResolutionMode.INTELLIGENT:
+            precedents: list[Precedent] = []
+            override_status: str | None = None
+            overridden_concepts: set[str] = set()
+            try:
                 step_start = time.monotonic()
                 precedents = await self._get_precedent().find_precedents(
                     request.concept, intent, user_ctx
@@ -126,6 +130,22 @@ class ResolutionEngine:
                     output={"precedents_found": len(precedents)},
                     latency_ms=(time.monotonic() - step_start) * 1000,
                 ))
+            except Exception as exc:
+                logger.warning("precedent lookup failed; continuing without: %s", exc)
+
+            # Apply hard-override corrections from precedents. A
+            # single eligible correction swaps the resolved concept;
+            # multiple distinct corrections for the same concept_type
+            # surface as disambiguation_required.
+            if precedents:
+                override_status = await self._apply_correction_overrides(
+                    precedents=precedents,
+                    intent=intent,
+                    user_ctx=user_ctx,
+                    resolved=resolved,
+                    dag_steps=dag_steps,
+                    overridden=overridden_concepts,
+                )
 
             # ========================================
             # Step 5: Authorize (OPA policy check)
@@ -176,10 +196,12 @@ class ResolutionEngine:
             )
 
             # ========================================
-            # Step 6b: Confidence threshold check
+            # Step 6b: Status — disambiguation > override > confidence
             # ========================================
             status = "complete"
-            if confidence.overall < self.CONFIDENCE_THRESHOLD and resolved:
+            if override_status == "disambiguation_required":
+                status = "disambiguation_required"
+            elif confidence.overall < self.CONFIDENCE_THRESHOLD and resolved:
                 status = "disambiguation_required"
 
             response = ResolveResponse(
@@ -464,6 +486,126 @@ class ResolutionEngine:
     # ============================================================
     # Shared methods (both modes)
     # ============================================================
+
+    async def _apply_correction_overrides(
+        self,
+        *,
+        precedents: list[Precedent],
+        intent: ParsedIntent,
+        user_ctx: UserContext,
+        resolved: dict[str, ResolvedConcept],
+        dag_steps: list[ResolutionDAGStep],
+        overridden: set[str],
+    ) -> str | None:
+        """Replace resolved concepts with structured precedent corrections.
+
+        Returns "disambiguation_required" when two or more eligible
+        corrections target the same concept_type with different
+        preferred_resolved_id values; the engine then sets the response
+        status accordingly so the caller sees both candidates and picks.
+
+        Records one DAG step per concept type considered (override or
+        conflict). Per-concept Confidence is set by `_compute_confidence`,
+        which trusts the resolved concept's own confidence — bumping that
+        to 1.0 here means definition-level confidence rises with it.
+        """
+        from src.resolution.precedent import PrecedentEngine
+
+        eligible = PrecedentEngine.compute_overrides(precedents, user_ctx, intent)
+        if not eligible:
+            return None
+
+        conflict = False
+        for concept_type, candidates in eligible.items():
+            distinct_targets = {
+                p.correction.preferred_resolved_id for p in candidates if p.correction
+            }
+            if len(distinct_targets) > 1:
+                # Conflicting corrections — surface both, do not pick.
+                conflict = True
+                dag_steps.append(ResolutionDAGStep(
+                    step=f"override_{concept_type}",
+                    method="precedent_correction",
+                    input={
+                        "concept_type": concept_type,
+                        "eligible_corrections": [
+                            {
+                                "query_id": p.query_id,
+                                "preferred_resolved_id": p.correction.preferred_resolved_id,
+                                "similarity": p.similarity,
+                                "corrected_at": p.correction.corrected_at,
+                            }
+                            for p in candidates if p.correction
+                        ],
+                    },
+                    output={"applied": False, "conflict": True},
+                    reasoning=(
+                        f"Multiple correction precedents conflict for "
+                        f"{concept_type} ({sorted(distinct_targets)}); "
+                        f"falling back to disambiguation_required."
+                    ),
+                ))
+                continue
+
+            # Single winner: pick highest similarity (ties broken by
+            # most-recent feedback_at, which already orders late records
+            # higher in lexicographic ISO 8601).
+            winner = max(
+                candidates,
+                key=lambda p: (p.similarity, p.correction.corrected_at if p.correction else ""),
+            )
+            corr = winner.correction
+            if corr is None:  # defensive — compute_overrides filters this
+                continue
+
+            previous = resolved.get(concept_type)
+            previous_id = previous.resolved_id if previous else None
+
+            reasoning = (
+                f"Applied correction from {winner.query_id} "
+                f"(similarity={winner.similarity:.2f}, dept match, "
+                f"corrected {corr.corrected_at})."
+            )
+
+            resolved[concept_type] = ResolvedConcept(
+                concept_type=concept_type,
+                raw_value=intent.concepts.get(
+                    concept_type, previous.raw_value if previous else ""
+                ),
+                resolved_id=corr.preferred_resolved_id,
+                resolved_name=corr.preferred_resolved_name or corr.preferred_resolved_id,
+                definition=(
+                    f"Human-verified correction propagated from "
+                    f"{winner.query_id}: {corr.note}".strip()
+                    if corr.note else
+                    f"Human-verified correction propagated from {winner.query_id}."
+                ),
+                # The correction is human-verified, so this concept's
+                # definition-level confidence is 1.0.
+                confidence=1.0,
+                reasoning=reasoning,
+            )
+            overridden.add(concept_type)
+
+            dag_steps.append(ResolutionDAGStep(
+                step=f"override_{concept_type}",
+                method="precedent_correction",
+                input={
+                    "concept_type": concept_type,
+                    "previous_resolved_id": previous_id,
+                    "precedent_query_id": winner.query_id,
+                    "similarity": winner.similarity,
+                    "department": corr.department,
+                },
+                output={
+                    "applied": True,
+                    "resolved_id": corr.preferred_resolved_id,
+                    "confidence_definition": 1.0,
+                },
+                reasoning=reasoning,
+            ))
+
+        return "disambiguation_required" if conflict else None
 
     async def _check_tribal_knowledge(
         self, resolved: dict[str, ResolvedConcept]
