@@ -596,10 +596,12 @@ ASSETS = [
 async def seed_postgres():
     conn = await asyncpg.connect(POSTGRES_DSN)
     try:
-        # Clear existing assets
-        await conn.execute("DELETE FROM resolution_sessions")
-        await conn.execute("DELETE FROM contract_versions")
-        await conn.execute("DELETE FROM assets")
+        # TRUNCATE ... CASCADE so this is idempotent across re-seeds even when
+        # resolution_embeddings has rows FK-pointing at resolution_sessions
+        # (plain DELETE fails with ForeignKeyViolationError on redeploys).
+        await conn.execute("TRUNCATE TABLE resolution_sessions CASCADE")
+        await conn.execute("TRUNCATE TABLE contract_versions CASCADE")
+        await conn.execute("TRUNCATE TABLE assets CASCADE")
 
         for asset in ASSETS:
             await conn.execute(
