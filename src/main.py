@@ -1,11 +1,12 @@
 """Enterprise Context Platform - FastAPI Application"""
+import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.config import settings
 from src.context.embeddings import embeddings as embedding_service
@@ -28,6 +29,7 @@ from src.federation.native_adapter import NativeAdapter
 from src.federation.orchestrator import FederationOrchestrator
 from src.resolution.engine import ResolutionEngine
 from src.semantic.cube_executor import run_execution_plan
+from src.telemetry import bus as telemetry_bus
 from src.traces.store import TraceStore
 
 logger = logging.getLogger(__name__)
@@ -287,6 +289,68 @@ async def get_provenance(resolution_id: str, http_request: Request):
         raise HTTPException(status_code=404, detail="Resolution not found")
     _enforce_session_owner(session, http_request)
     return session
+
+
+# ============================================================
+# Telemetry stream (Observer UI)
+# ============================================================
+
+
+_HEARTBEAT_INTERVAL_SEC = 15.0
+
+
+@app.get("/api/v1/telemetry/stream")
+async def telemetry_stream(http_request: Request, resolution_id: str | None = None):
+    """Server-Sent Events stream of every TelemetryEvent on the bus.
+
+    Observer UIs (observer/) consume this to drive the timeline, DAG, and
+    stores panels live. Each event is delivered as a single `data: {json}`
+    SSE frame.
+
+    ?resolution_id=rs_... filters the stream to a single resolution.
+    Heartbeats every 15s keep proxies from killing idle connections.
+    """
+    _require_api_key(http_request)
+
+    async def iterator():
+        yield ": connected\n\n"
+        subscription = telemetry_bus.subscribe()
+        last_heartbeat = asyncio.get_event_loop().time()
+        try:
+            while True:
+                if await http_request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(
+                        subscription.__anext__(), timeout=_HEARTBEAT_INTERVAL_SEC
+                    )
+                except asyncio.TimeoutError:
+                    yield f": heartbeat {int(asyncio.get_event_loop().time())}\n\n"
+                    last_heartbeat = asyncio.get_event_loop().time()
+                    continue
+                except StopAsyncIteration:
+                    break
+
+                if resolution_id and event.resolution_id != resolution_id:
+                    continue
+                yield event.to_sse()
+
+                now = asyncio.get_event_loop().time()
+                if now - last_heartbeat > _HEARTBEAT_INTERVAL_SEC:
+                    yield f": heartbeat {int(now)}\n\n"
+                    last_heartbeat = now
+        finally:
+            await subscription.aclose()
+
+    return StreamingResponse(
+        iterator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ============================================================

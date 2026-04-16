@@ -28,8 +28,23 @@ from src.models import (
     UserContext,
 )
 from src.resolution.intent_rules import parse_intent_rules
+from src.telemetry import (
+    TelemetryEvent,
+    TelemetryStage,
+    TelemetryStatus,
+    bus as telemetry_bus,
+    truncate_payload,
+)
 
 logger = logging.getLogger(__name__)
+
+
+async def _emit(event: TelemetryEvent) -> None:
+    """Fire-and-forget publish — a failed publish never breaks resolution."""
+    try:
+        await telemetry_bus.publish(event)
+    except Exception:  # pragma: no cover
+        pass
 
 
 class ResolutionEngine:
@@ -70,10 +85,27 @@ class ResolutionEngine:
         user_ctx = request.user_context or UserContext(user_id="anonymous")
         dag_steps = []
 
+        await _emit(TelemetryEvent(
+            resolution_id=resolution_id,
+            stage=TelemetryStage.RESOLUTION_START,
+            status=TelemetryStatus.STARTED,
+            payload_summary=truncate_payload({
+                "concept": request.concept,
+                "mode": self.mode.value,
+                "user_id": user_ctx.user_id,
+                "department": user_ctx.department,
+            }),
+        ))
+
         try:
             # ========================================
             # Step 1: Parse Intent
             # ========================================
+            await _emit(TelemetryEvent(
+                resolution_id=resolution_id,
+                stage=TelemetryStage.PARSE_INTENT,
+                status=TelemetryStatus.STARTED,
+            ))
             if self.mode == ResolutionMode.INTELLIGENT:
                 intent = await self._get_neural().parse_intent(request.concept, user_ctx)
             else:
@@ -86,6 +118,16 @@ class ResolutionEngine:
                 output={"concepts": intent.concepts, "type": intent.intent_type},
                 latency_ms=(time.monotonic() - start) * 1000,
             ))
+            await _emit(TelemetryEvent(
+                resolution_id=resolution_id,
+                stage=TelemetryStage.PARSE_INTENT,
+                status=TelemetryStatus.OK,
+                latency_ms=(time.monotonic() - start) * 1000,
+                payload_summary=truncate_payload({
+                    "concepts": intent.concepts,
+                    "intent_type": intent.intent_type,
+                }),
+            ))
 
             # ========================================
             # Step 2: Resolve each concept
@@ -93,6 +135,15 @@ class ResolutionEngine:
             resolved = {}
             for concept_type, raw_value in intent.concepts.items():
                 step_start = time.monotonic()
+                await _emit(TelemetryEvent(
+                    resolution_id=resolution_id,
+                    stage=TelemetryStage.RESOLVE_CONCEPT,
+                    status=TelemetryStatus.STARTED,
+                    payload_summary=truncate_payload({
+                        "concept_type": concept_type,
+                        "raw": raw_value,
+                    }),
+                ))
 
                 if self.mode == ResolutionMode.INTELLIGENT:
                     rc = await self._resolve_intelligent(concept_type, raw_value, user_ctx)
@@ -100,26 +151,54 @@ class ResolutionEngine:
                     rc = await self._resolve_orchestrator(concept_type, raw_value, user_ctx)
 
                 resolved[concept_type] = rc
+                concept_latency = (time.monotonic() - step_start) * 1000
                 dag_steps.append(ResolutionDAGStep(
                     step=f"resolve_{concept_type}",
                     method=self.mode.value,
                     input={"raw": raw_value, "department": user_ctx.department},
                     output={"resolved": rc.resolved_id, "confidence": rc.confidence},
                     reasoning=rc.reasoning,
-                    latency_ms=(time.monotonic() - step_start) * 1000,
+                    latency_ms=concept_latency,
+                ))
+                await _emit(TelemetryEvent(
+                    resolution_id=resolution_id,
+                    stage=TelemetryStage.RESOLVE_CONCEPT,
+                    status=TelemetryStatus.OK,
+                    latency_ms=concept_latency,
+                    payload_summary=truncate_payload({
+                        "concept_type": concept_type,
+                        "resolved_id": rc.resolved_id,
+                        "confidence": rc.confidence,
+                    }),
                 ))
 
             # ========================================
             # Step 3: Check tribal knowledge
             # ========================================
             step_start = time.monotonic()
+            await _emit(TelemetryEvent(
+                resolution_id=resolution_id,
+                stage=TelemetryStage.TRIBAL_CHECK,
+                status=TelemetryStatus.STARTED,
+            ))
             warnings = await self._check_tribal_knowledge(resolved)
+            tribal_latency = (time.monotonic() - step_start) * 1000
             dag_steps.append(ResolutionDAGStep(
                 step="check_tribal_knowledge",
                 method="graph+vector",
                 input={"resolved_concepts": {k: v.resolved_id for k, v in resolved.items()}},
                 output={"warnings_found": len(warnings)},
-                latency_ms=(time.monotonic() - step_start) * 1000,
+                latency_ms=tribal_latency,
+            ))
+            await _emit(TelemetryEvent(
+                resolution_id=resolution_id,
+                stage=TelemetryStage.TRIBAL_CHECK,
+                status=TelemetryStatus.WARNING if warnings else TelemetryStatus.OK,
+                latency_ms=tribal_latency,
+                payload_summary=truncate_payload({
+                    "warnings_found": len(warnings),
+                    "ids": [w.id for w in warnings],
+                }),
             ))
 
             # ========================================
@@ -131,18 +210,40 @@ class ResolutionEngine:
             overridden_concepts: set[str] = set()
             try:
                 step_start = time.monotonic()
+                await _emit(TelemetryEvent(
+                    resolution_id=resolution_id,
+                    stage=TelemetryStage.PRECEDENT,
+                    status=TelemetryStatus.STARTED,
+                ))
                 precedents = await self._get_precedent().find_precedents(
                     request.concept, intent, user_ctx
                 )
+                precedent_latency = (time.monotonic() - step_start) * 1000
                 dag_steps.append(ResolutionDAGStep(
                     step="find_precedents",
                     method="embedding_similarity",
                     input={"query": request.concept},
                     output={"precedents_found": len(precedents)},
-                    latency_ms=(time.monotonic() - step_start) * 1000,
+                    latency_ms=precedent_latency,
+                ))
+                await _emit(TelemetryEvent(
+                    resolution_id=resolution_id,
+                    stage=TelemetryStage.PRECEDENT,
+                    status=TelemetryStatus.OK,
+                    latency_ms=precedent_latency,
+                    payload_summary=truncate_payload({
+                        "precedents_found": len(precedents),
+                        "feedback_mix": [p.feedback for p in precedents],
+                    }),
                 ))
             except Exception as exc:
                 logger.warning("precedent lookup failed; continuing without: %s", exc)
+                await _emit(TelemetryEvent(
+                    resolution_id=resolution_id,
+                    stage=TelemetryStage.PRECEDENT,
+                    status=TelemetryStatus.ERROR,
+                    payload_summary=truncate_payload({"error": str(exc)}),
+                ))
 
             # Apply hard-override corrections from precedents. A
             # single eligible correction swaps the resolved concept;
@@ -162,9 +263,15 @@ class ResolutionEngine:
             # Step 5: Authorize (OPA policy check)
             # ========================================
             step_start = time.monotonic()
+            await _emit(TelemetryEvent(
+                resolution_id=resolution_id,
+                stage=TelemetryStage.AUTHZ,
+                status=TelemetryStatus.STARTED,
+            ))
             auth_result = await self._policy.authorize_resolution(user_ctx, resolved)
             if self.audit:
                 await self.audit.log_authorization(resolution_id, user_ctx, auth_result, action="resolve")
+            authz_latency = (time.monotonic() - step_start) * 1000
             dag_steps.append(ResolutionDAGStep(
                 step="authorize",
                 method="opa_policy",
@@ -174,7 +281,17 @@ class ResolutionEngine:
                     "denied": auth_result.denied_concepts,
                     "policies": auth_result.policies_evaluated,
                 },
-                latency_ms=(time.monotonic() - step_start) * 1000,
+                latency_ms=authz_latency,
+            ))
+            await _emit(TelemetryEvent(
+                resolution_id=resolution_id,
+                stage=TelemetryStage.AUTHZ,
+                status=TelemetryStatus.OK if auth_result.allowed else TelemetryStatus.DENIED,
+                latency_ms=authz_latency,
+                payload_summary=truncate_payload({
+                    "allowed": auth_result.allowed,
+                    "denied_concepts": auth_result.denied_concepts,
+                }),
             ))
 
             # Filter denied concepts — return "not found" to prevent info leakage.
@@ -194,7 +311,23 @@ class ResolutionEngine:
             # Step 5b: Build execution plan (after authz so denied
             #          concepts never appear in the plan)
             # ========================================
+            step_start = time.monotonic()
+            await _emit(TelemetryEvent(
+                resolution_id=resolution_id,
+                stage=TelemetryStage.BUILD_PLAN,
+                status=TelemetryStatus.STARTED,
+            ))
             execution_plan = await self._build_execution_plan(resolved, intent)
+            await _emit(TelemetryEvent(
+                resolution_id=resolution_id,
+                stage=TelemetryStage.BUILD_PLAN,
+                status=TelemetryStatus.OK,
+                latency_ms=(time.monotonic() - step_start) * 1000,
+                payload_summary=truncate_payload({
+                    "plan_steps": len(execution_plan),
+                    "targets": [s.target for s in execution_plan],
+                }),
+            ))
 
             # ========================================
             # Step 6: Compute confidence
@@ -216,9 +349,6 @@ class ResolutionEngine:
                 status = "disambiguation_required"
 
             # Build source attribution from resolved concepts.
-            # With only the Native adapter active, attribution is a
-            # single entry for "native". Once external adapters land,
-            # the orchestrator will produce multi-source attribution.
             source_attribution = self._build_source_attribution(resolved)
 
             response = ResolveResponse(
@@ -239,17 +369,50 @@ class ResolutionEngine:
             # ========================================
             # Step 7: Persist decision trace (ALWAYS, both modes)
             # ========================================
+            persist_start = time.monotonic()
+            await _emit(TelemetryEvent(
+                resolution_id=resolution_id,
+                stage=TelemetryStage.PERSIST_TRACE,
+                status=TelemetryStatus.STARTED,
+            ))
             await self.traces.persist_resolution(
                 resolution_id=resolution_id,
                 request=request,
                 response=response,
                 intent=intent,
             )
+            await _emit(TelemetryEvent(
+                resolution_id=resolution_id,
+                stage=TelemetryStage.PERSIST_TRACE,
+                status=TelemetryStatus.OK,
+                latency_ms=(time.monotonic() - persist_start) * 1000,
+            ))
+
+            await _emit(TelemetryEvent(
+                resolution_id=resolution_id,
+                stage=TelemetryStage.RESOLUTION_END,
+                status=TelemetryStatus.OK,
+                latency_ms=(time.monotonic() - start) * 1000,
+                payload_summary=truncate_payload({
+                    "status": response.status,
+                    "confidence_overall": response.confidence.overall,
+                    "warnings": len(response.warnings),
+                    "precedents": len(response.precedents_used),
+                    "plan_steps": len(response.execution_plan),
+                }),
+            ))
 
             return response
 
         except Exception as e:
             await self.traces.persist_failure(resolution_id, request, str(e))
+            await _emit(TelemetryEvent(
+                resolution_id=resolution_id,
+                stage=TelemetryStage.RESOLUTION_END,
+                status=TelemetryStatus.ERROR,
+                latency_ms=(time.monotonic() - start) * 1000,
+                payload_summary=truncate_payload({"error": str(e)}),
+            ))
             raise
 
     # ============================================================

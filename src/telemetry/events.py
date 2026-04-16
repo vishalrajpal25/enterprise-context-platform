@@ -1,37 +1,48 @@
-"""Telemetry event schema and no-op bus.
+"""Telemetry event schema.
 
-Defines the event shape that resolution and federation stages emit.
-The bus collects subscribers; publish() fans out to each. With zero
-subscribers, publish() is a no-op and never blocks.
-
-This module is the coordination point between the federation layer
-(Session C) and the observer UI (Session D). Session D may add a
-real async bus; this stub ensures federation code compiles and runs
-without blocking on that work.
+Single source of truth for the observer wire format. Mirrored by hand in
+observer/src/types/events.ts — keep the two in sync. Federation adapters
+publish `adapter_call` / `federation_discover` / `federation_merge` events
+against the same schema.
 """
 from __future__ import annotations
 
-import logging
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Awaitable
+from typing import Any
 
-logger = logging.getLogger(__name__)
+from pydantic import BaseModel, Field
 
 
 class TelemetryStage(str, Enum):
-    RESOLUTION_START = "resolution_start"
     PARSE_INTENT = "parse_intent"
     RESOLVE_CONCEPT = "resolve_concept"
     TRIBAL_CHECK = "tribal_check"
-    PRECEDENT = "precedent"
-    FEDERATION_DISCOVER = "federation_discover"
-    FEDERATION_MERGE = "federation_merge"
     AUTHZ = "authz"
+    PRECEDENT = "precedent"
     BUILD_PLAN = "build_plan"
     PERSIST_TRACE = "persist_trace"
+    # Federation (Session C)
+    FEDERATION_DISCOVER = "federation_discover"
+    FEDERATION_MERGE = "federation_merge"
+    # Nested / cross-cutting
+    ADAPTER_CALL = "adapter_call"
+    STORE_CALL = "store_call"
+    # Top-level markers
+    RESOLUTION_START = "resolution_start"
     RESOLUTION_END = "resolution_end"
+
+
+class TelemetryStore(str, Enum):
+    NEO4J = "neo4j"
+    PGVECTOR = "pgvector"
+    POSTGRES = "postgres"
+    OPA = "opa"
+    CUBE = "cube"
+    ANTHROPIC = "anthropic"
+    VOYAGE = "voyage"
+    OPENAI = "openai"
+    TRACE_STORE = "trace_store"
 
 
 class TelemetryStatus(str, Enum):
@@ -39,53 +50,63 @@ class TelemetryStatus(str, Enum):
     OK = "ok"
     WARNING = "warning"
     ERROR = "error"
-    DENIED = "denied"
     TIMEOUT = "timeout"
+    DENIED = "denied"
 
 
-@dataclass
-class TelemetryEvent:
-    resolution_id: str = ""
-    stage: TelemetryStage = TelemetryStage.RESOLUTION_START
-    status: TelemetryStatus = TelemetryStatus.OK
-    latency_ms: float = 0.0
-    payload_summary: dict[str, Any] = field(default_factory=dict)
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+_STRING_CAP = 500
+_ARRAY_CAP = 10
 
 
-# Type alias for subscribers
-Subscriber = Callable[[TelemetryEvent], Awaitable[None]]
+def truncate_payload(
+    value: Any, *, string_cap: int = _STRING_CAP, array_cap: int = _ARRAY_CAP
+) -> Any:
+    """Recursively cap strings at 500 chars and arrays at 10 items.
+
+    Observer payloads must never leak full definitions, full graph results,
+    or secrets. Every publisher pipes payload_summary through this.
+    """
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, str):
+        if len(value) <= string_cap:
+            return value
+        return value[:string_cap] + f"...[+{len(value) - string_cap} chars]"
+    if isinstance(value, (list, tuple)):
+        truncated = [
+            truncate_payload(v, string_cap=string_cap, array_cap=array_cap)
+            for v in value[:array_cap]
+        ]
+        if len(value) > array_cap:
+            truncated.append(f"...[+{len(value) - array_cap} items]")
+        return truncated
+    if isinstance(value, dict):
+        return {
+            k: truncate_payload(v, string_cap=string_cap, array_cap=array_cap)
+            for k, v in value.items()
+        }
+    s = str(value)
+    if len(s) <= string_cap:
+        return s
+    return s[:string_cap] + f"...[+{len(s) - string_cap} chars]"
 
 
-class TelemetryBus:
-    """In-process fan-out bus for telemetry events.
+class TelemetryEvent(BaseModel):
+    """A single event on the telemetry bus.
 
-    No-op when no subscribers are registered. Publish never blocks the
-    caller — subscriber errors are logged and swallowed.
+    Events are fire-and-forget: publishers never block on slow subscribers
+    and observer crashes never affect ECP.
     """
 
-    def __init__(self) -> None:
-        self._subscribers: list[Subscriber] = []
+    resolution_id: str
+    stage: TelemetryStage
+    status: TelemetryStatus
+    store: TelemetryStore | None = None
+    latency_ms: float = 0.0
+    payload_summary: dict[str, Any] = Field(default_factory=dict)
+    ts: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    parent_stage: TelemetryStage | None = None
+    source_id: str | None = None
 
-    def subscribe(self, handler: Subscriber) -> None:
-        self._subscribers.append(handler)
-
-    async def publish(self, event: TelemetryEvent) -> None:
-        for sub in self._subscribers:
-            try:
-                await sub(event)
-            except Exception as exc:
-                logger.debug("telemetry subscriber error (swallowed): %s", exc)
-
-
-# Module-level singleton
-bus = TelemetryBus()
-
-
-def truncate_payload(data: dict, max_chars: int = 500) -> dict:
-    """Trim large values for telemetry payloads."""
-    result: dict[str, Any] = {}
-    for k, v in data.items():
-        s = str(v)
-        result[k] = s[:max_chars] if len(s) > max_chars else v
-    return result
+    def to_sse(self) -> str:
+        return f"data: {self.model_dump_json()}\n\n"
