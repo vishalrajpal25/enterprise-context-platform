@@ -1,18 +1,20 @@
-# Render.com Blueprint — free-tier deployment.
+# Render.com Blueprint — Neon (Postgres+pgvector) + Aura (Neo4j) + Render (web).
 #
-# Hosting strategy (target: $0/month, ~$5–10 lifetime spend on OpenAI embeddings):
-#   - Render free web service (this file)
-#   - Neon free Postgres + pgvector (https://neon.tech)
-#   - Neo4j AuraDB Free (https://neo4j.com/cloud/aura)
-#   - Upstash Redis free (https://upstash.com)  [optional, currently unused at runtime]
-#   - UptimeRobot free 5-min HTTP check pointed at /admin/keep-warm
-#     (keeps the entire stack — Render + Neon + AuraDB — from auto-pausing)
+# Topology:
+#   - Render web service (this file)                — ECP FastAPI on :8080
+#   - Neon free Postgres + pgvector (external)      — https://neon.tech
+#   - Neo4j AuraDB Free (external)                  — https://neo4j.com/cloud/aura
+#   - In-process caches only                        — no Redis for single-instance demo
+#   - UptimeRobot free 5-min HTTP check → /admin/keep-warm (keeps Render + Neon + Aura warm)
 #
-# After first successful deploy:
-#   1. Set ECP_BOOTSTRAP_DB=true and ECP_AUTO_SEED_DEMO=true, redeploy once
-#   2. Verify https://<service>.onrender.com/health returns demo_mode=true
-#   3. Set both bootstrap flags back to false
-#   4. Add an UptimeRobot HTTP check on https://<service>.onrender.com/admin/keep-warm
+# Apply flow:
+#   1. Render → New → Blueprint → select this repo → applies this file
+#   2. Render prompts for every env var marked `sync: false` — paste secrets there
+#   3. First deploy runs `preDeployCommand` (init_db.py, idempotent) then boots the web service
+#   4. Run scripts/seed_remote.sh locally once against Neon+Aura to load demo data
+#   5. Verify /health, then optionally add UptimeRobot ping on /admin/keep-warm
+#
+# Secrets never live in this file — only non-sensitive defaults do.
 
 services:
   - type: web
@@ -21,43 +23,66 @@ services:
     plan: free
     autoDeploy: true
     healthCheckPath: /health
+    # Idempotent — CREATE TABLE IF NOT EXISTS + vector-dim migration.
+    # Safe to re-run on every deploy.
+    preDeployCommand: python scripts/init_db.py
     envVars:
-      # Resolution behavior
+      # ----- Resolution behavior -----
       - key: ECP_RESOLUTION_MODE
-        value: orchestrator
+        value: orchestrator           # rule-based; flip to `intelligent` after adding ECP_ANTHROPIC_API_KEY
       - key: ECP_DEMO_MODE
-        value: "true"
+        value: "true"                 # opens CORS for the public demo UI
 
-      # OPA: no policy server in the free demo, so fail-open is intentional.
-      # NEVER copy this value to a production deployment.
+      # ----- Authorization (DEMO ONLY) -----
+      # No OPA sidecar deployed, so authorization fails open.
+      # Production MUST run OPA and set ECP_OPA_DEFAULT_ALLOW=false.
       - key: ECP_OPA_DEFAULT_ALLOW
         value: "true"
 
-      # Search posture: identity-required, but the demo HTML page sends a
-      # demo user header, so search still works for visitors.
+      # ----- Search posture -----
+      # Identity-required by default; demo UI sends a demo user header so visitor search still works.
       - key: ECP_SEARCH_REQUIRE_IDENTITY
         value: "true"
 
-      # First-deploy bootstrap (flip back to false after the first run).
+      # ----- Embeddings (Voyage, free tier) -----
+      - key: ECP_EMBEDDING_PROVIDER
+        value: voyage
+      - key: ECP_EMBEDDING_DIM
+        value: "512"                  # voyage-3-lite; change to 1536 if switching to OpenAI
+
+      # ----- Legacy in-container bootstrap (OFF now that we use preDeployCommand) -----
       - key: ECP_BOOTSTRAP_DB
         value: "false"
       - key: ECP_AUTO_SEED_DEMO
         value: "false"
 
-      # Embeddings — defaults to Voyage (free tier, no card). Switch by env:
-      #   ECP_EMBEDDING_PROVIDER=voyage   (default)
-      #   ECP_EMBEDDING_DIM=512           (voyage-3-lite); set 1536 for openai
-      - key: ECP_EMBEDDING_PROVIDER
-        value: voyage
-      - key: ECP_EMBEDDING_DIM
-        value: "512"
+      # ============================================================
+      # SECRETS — Render prompts for these at blueprint apply time.
+      # `sync: false` means "never sync from another env group;
+      #                     always require manual entry per environment."
+      # ============================================================
 
-      # Set these as SECRETS in the Render dashboard, not here:
-      #   ECP_POSTGRES_DSN     (Neon connection string, must include sslmode=require)
-      #   ECP_NEO4J_URI        (neo4j+s://<id>.databases.neo4j.io)
-      #   ECP_NEO4J_USER       (neo4j)
-      #   ECP_NEO4J_PASSWORD   (from AuraDB console)
-      #   ECP_REDIS_URL        (optional)
-      #   ECP_ANTHROPIC_API_KEY (for intelligent mode)
-      #   ECP_VOYAGE_API_KEY    (free at voyageai.com — for cosine retrieval)
-      #   ECP_OPENAI_API_KEY    (alternative embedding provider)
+      # Neon: pooled connection string, MUST include ?sslmode=require
+      - key: ECP_POSTGRES_DSN
+        sync: false
+
+      # Aura: the neo4j+s://<id>.databases.neo4j.io URI
+      - key: ECP_NEO4J_URI
+        sync: false
+      - key: ECP_NEO4J_USER
+        sync: false                   # usually "neo4j" or the instance id
+      - key: ECP_NEO4J_PASSWORD
+        sync: false
+
+      # API auth — required. Every request must send x-ecp-api-key: <this>.
+      # Generate with: openssl rand -hex 32
+      - key: ECP_API_KEY
+        sync: false
+
+      # Embeddings — real cosine retrieval needs this; otherwise ECP falls back to ILIKE.
+      - key: ECP_VOYAGE_API_KEY
+        sync: false
+
+      # OPTIONAL — only if you flip ECP_RESOLUTION_MODE to intelligent.
+      - key: ECP_ANTHROPIC_API_KEY
+        sync: false
