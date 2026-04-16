@@ -24,6 +24,8 @@ from src.models import (
     SearchRequest,
     UserContext,
 )
+from src.federation.native_adapter import NativeAdapter
+from src.federation.orchestrator import FederationOrchestrator
 from src.resolution.engine import ResolutionEngine
 from src.semantic.cube_executor import run_execution_plan
 from src.traces.store import TraceStore
@@ -79,7 +81,14 @@ async def lifespan(app: FastAPI):
     await vector.connect()
     await traces.connect()
     await audit.connect()
-    engine = ResolutionEngine(graph, registry, vector, traces, audit)
+    # Federation: wrap native stores in an adapter, register with orchestrator
+    native_adapter = NativeAdapter(graph, registry, vector)
+    federation = FederationOrchestrator()
+    federation.register_adapter(native_adapter)
+    engine = ResolutionEngine(
+        graph, registry, vector, traces, audit,
+        federation_orchestrator=federation,
+    )
     embedding_service.warn_if_unavailable_once()
     _print_startup_banner()
     yield

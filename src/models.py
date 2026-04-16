@@ -88,6 +88,14 @@ class ResolutionDAGStep(BaseModel):
     latency_ms: float = 0.0
 
 
+class SourceAttributionItem(BaseModel):
+    """Which federated source contributed to this resolution."""
+    source_id: str
+    source_kind: str                   # "native", "fabric_iq", "snowflake_sva", etc.
+    certification_tier: int = 4
+    used_for: list[str] = Field(default_factory=list)  # concept types this source provided
+
+
 class ResolveResponse(BaseModel):
     resolution_id: str
     status: str                        # "resolved", "disambiguation_required", "failed"
@@ -97,6 +105,8 @@ class ResolveResponse(BaseModel):
     warnings: list[TribalWarning] = Field(default_factory=list)
     precedents_used: list[Precedent] = Field(default_factory=list)
     resolution_dag: list[ResolutionDAGStep] = Field(default_factory=list)
+    # Federation source attribution (v4)
+    source_attribution: list[SourceAttributionItem] = Field(default_factory=list)
     # Governance / authorization fields
     policies_evaluated: list[str] = Field(default_factory=list)
     access_granted: bool = True

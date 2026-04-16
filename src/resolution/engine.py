@@ -13,6 +13,7 @@ from datetime import datetime
 
 from src.config import settings, ResolutionMode
 from src.governance.policy import OPAPolicyClient
+from src.federation.orchestrator import FederationOrchestrator, SourceAttribution
 from src.models import (
     Confidence,
     ExecutionStep,
@@ -22,6 +23,7 @@ from src.models import (
     ResolvedConcept,
     ResolveRequest,
     ResolveResponse,
+    SourceAttributionItem,
     TribalWarning,
     UserContext,
 )
@@ -40,7 +42,15 @@ class ResolutionEngine:
     # Confidence threshold: below this, return disambiguation_required
     CONFIDENCE_THRESHOLD = 0.7
 
-    def __init__(self, graph_client, registry_client, vector_client, trace_store, audit_logger=None):
+    def __init__(
+        self,
+        graph_client,
+        registry_client,
+        vector_client,
+        trace_store,
+        audit_logger=None,
+        federation_orchestrator: FederationOrchestrator | None = None,
+    ):
         self.graph = graph_client
         self.registry = registry_client
         self.vector = vector_client
@@ -48,8 +58,9 @@ class ResolutionEngine:
         self.audit = audit_logger
         self.mode = settings.resolution_mode
         self._policy = OPAPolicyClient()
+        self._federation = federation_orchestrator
 
-        # Lazy-init neural/precedent layers only in intelligent mode
+        # Lazy-init neural/precedent layers
         self._neural = None
         self._precedent = None
 
@@ -204,6 +215,12 @@ class ResolutionEngine:
             elif confidence.overall < self.CONFIDENCE_THRESHOLD and resolved:
                 status = "disambiguation_required"
 
+            # Build source attribution from resolved concepts.
+            # With only the Native adapter active, attribution is a
+            # single entry for "native". Once external adapters land,
+            # the orchestrator will produce multi-source attribution.
+            source_attribution = self._build_source_attribution(resolved)
+
             response = ResolveResponse(
                 resolution_id=resolution_id,
                 status=status,
@@ -213,6 +230,7 @@ class ResolutionEngine:
                 warnings=warnings,
                 precedents_used=precedents,
                 resolution_dag=dag_steps,
+                source_attribution=source_attribution,
                 policies_evaluated=auth_result.policies_evaluated,
                 access_granted=auth_result.allowed,
                 filtered_concepts=filtered_concepts,
@@ -826,3 +844,22 @@ class ResolutionEngine:
             from src.resolution.precedent import PrecedentEngine
             self._precedent = PrecedentEngine(self.traces)
         return self._precedent
+
+    @staticmethod
+    def _build_source_attribution(
+        resolved: dict[str, ResolvedConcept],
+    ) -> list[SourceAttributionItem]:
+        """Build source_attribution for the response.
+
+        With only the Native adapter active, all concepts come from
+        "native". When federation is fully wired, the orchestrator's
+        SourceAttribution objects will feed this instead.
+        """
+        if not resolved:
+            return []
+        return [SourceAttributionItem(
+            source_id="native",
+            source_kind="native",
+            certification_tier=1,
+            used_for=list(resolved.keys()),
+        )]
