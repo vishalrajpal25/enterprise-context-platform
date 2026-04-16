@@ -613,6 +613,18 @@ async def seed_postgres():
 
         count = await conn.fetchval("SELECT COUNT(*) FROM assets")
         print(f"PostgreSQL: {count} assets seeded.")
+
+        # Seed the native context source (always present)
+        await conn.execute("""
+            INSERT INTO context_sources
+                (source_id, source_kind, adapter_class, connection,
+                 certification_tier, owner, domains, precedence, enabled)
+            VALUES ('native', 'native',
+                    'src.federation.native_adapter.NativeAdapter',
+                    '{}', 1, 'ecp', '{}', 0, true)
+            ON CONFLICT (source_id) DO NOTHING
+        """)
+        print("PostgreSQL: native context source seeded.")
     finally:
         await conn.close()
 

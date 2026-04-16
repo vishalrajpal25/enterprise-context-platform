@@ -120,6 +120,21 @@ CREATE TABLE IF NOT EXISTS osi_sync_log (
     sync_at TIMESTAMP DEFAULT NOW(),
     details JSONB
 );
+
+-- Federation: context source registry (v4)
+CREATE TABLE IF NOT EXISTS context_sources (
+    source_id VARCHAR(50) PRIMARY KEY,
+    source_kind VARCHAR(50) NOT NULL,
+    adapter_class VARCHAR(200) NOT NULL,
+    connection JSONB NOT NULL DEFAULT '{{}}',
+    certification_tier INTEGER NOT NULL DEFAULT 4,
+    owner VARCHAR(100),
+    domains TEXT[] NOT NULL DEFAULT '{{}}',
+    precedence INTEGER NOT NULL DEFAULT 100,
+    health_check_at TIMESTAMP,
+    last_synced_at TIMESTAMP,
+    enabled BOOLEAN NOT NULL DEFAULT true
+);
 """
 
 
