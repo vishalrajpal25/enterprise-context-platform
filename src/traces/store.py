@@ -7,7 +7,13 @@ import asyncpg
 
 from src.config import settings
 from src.context.embeddings import embeddings, format_vector_literal
-from src.models import ResolveRequest, ResolveResponse, ParsedIntent, FeedbackStatus
+from src.models import (
+    CorrectionDetail,
+    FeedbackStatus,
+    ParsedIntent,
+    ResolveRequest,
+    ResolveResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -162,14 +168,21 @@ class TraceStore:
         self,
         resolution_id: str,
         feedback: FeedbackStatus,
-        details: str = "",
+        details: str | CorrectionDetail = "",
     ) -> bool:
+        # Persist structured corrections as-is so PrecedentEngine can
+        # read concept_type and preferred_resolved_id back at lookup
+        # time. Legacy string corrections are wrapped under "details".
+        if isinstance(details, CorrectionDetail):
+            payload = {"structured": details.model_dump()}
+        else:
+            payload = {"details": details}
         async with self._pool.acquire() as conn:
             updated = await conn.execute("""
                 UPDATE resolution_sessions
                 SET feedback_status = $2, feedback_at = NOW(), correction_details = $3
                 WHERE query_id = $1
-            """, resolution_id, feedback.value, json.dumps({"details": details}))
+            """, resolution_id, feedback.value, json.dumps(payload))
             return not updated.endswith(" 0")
 
     async def find_similar(self, query: str, department: str = "", limit: int = 10) -> list[dict]:
@@ -178,6 +191,9 @@ class TraceStore:
         Cosine search over query_embedding when an embedding service is
         available; ILIKE fallback otherwise. Each row carries a `similarity`
         field in [0, 1] so callers (PrecedentEngine) get a real signal.
+
+        Includes user_context, correction_details, and feedback_at so the
+        PrecedentEngine can apply department-matched correction overrides.
         """
         if embeddings.is_available():
             try:
@@ -189,7 +205,8 @@ class TraceStore:
 
         async with self._pool.acquire() as conn:
             rows = await conn.fetch("""
-                SELECT query_id, original_query, feedback_status, confidence,
+                SELECT query_id, user_context, original_query, feedback_status,
+                       correction_details, feedback_at, confidence,
                        definitions_selected, started_at,
                        0.65::float AS similarity
                 FROM resolution_sessions
@@ -198,15 +215,16 @@ class TraceStore:
                 ORDER BY started_at DESC
                 LIMIT $2
             """, f"%{query}%", limit)
-            return [dict(r) for r in rows]
+            return [_row_to_jsonable(r) for r in rows]
 
     async def _cosine_find_similar(self, query_vec: list[float], limit: int) -> list[dict]:
         vec_literal = format_vector_literal(query_vec)
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT s.query_id, s.original_query, s.feedback_status, s.confidence,
-                       s.definitions_selected, s.started_at,
+                SELECT s.query_id, s.user_context, s.original_query,
+                       s.feedback_status, s.correction_details, s.feedback_at,
+                       s.confidence, s.definitions_selected, s.started_at,
                        (1 - (e.query_embedding <=> $1::vector))::float AS similarity
                 FROM resolution_sessions s
                 JOIN resolution_embeddings e ON e.query_id = s.query_id
@@ -216,4 +234,4 @@ class TraceStore:
                 """,
                 vec_literal, limit,
             )
-            return [dict(r) for r in rows]
+            return [_row_to_jsonable(r) for r in rows]
