@@ -304,7 +304,9 @@ async def get_provenance(resolution_id: str, http_request: Request):
 # ============================================================
 
 
-_HEARTBEAT_INTERVAL_SEC = 15.0
+# Render free tier drops idle connections aggressively (~30s). Keep the
+# heartbeat well under that to prevent disconnects.
+_HEARTBEAT_INTERVAL_SEC = 5.0
 
 
 @app.get("/api/v1/telemetry/stream")
@@ -331,7 +333,9 @@ async def telemetry_stream(
     user_resolution_ids: set[str] = set()
 
     async def iterator():
-        yield ": connected\n\n"
+        # Send a proper data event on connect so the browser EventSource
+        # fires onmessage and confirms the stream is alive.
+        yield 'data: {"type":"connected"}\n\n'
         subscription = telemetry_bus.subscribe()
         last_heartbeat = asyncio.get_event_loop().time()
         try:
@@ -343,7 +347,7 @@ async def telemetry_stream(
                         subscription.__anext__(), timeout=_HEARTBEAT_INTERVAL_SEC
                     )
                 except asyncio.TimeoutError:
-                    yield f": heartbeat {int(asyncio.get_event_loop().time())}\n\n"
+                    yield f'data: {{"type":"heartbeat","ts":{int(asyncio.get_event_loop().time())}}}\n\n'
                     last_heartbeat = asyncio.get_event_loop().time()
                     continue
                 except StopAsyncIteration:
@@ -368,7 +372,7 @@ async def telemetry_stream(
 
                 now = asyncio.get_event_loop().time()
                 if now - last_heartbeat > _HEARTBEAT_INTERVAL_SEC:
-                    yield f": heartbeat {int(now)}\n\n"
+                    yield f'data: {{"type":"heartbeat","ts":{int(now)}}}\n\n'
                     last_heartbeat = now
         finally:
             await subscription.aclose()

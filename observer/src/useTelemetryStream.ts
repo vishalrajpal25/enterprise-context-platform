@@ -64,13 +64,16 @@ export function useTelemetryStream(
 
       source.addEventListener("message", (ev) => {
         try {
-          const parsed = JSON.parse(ev.data) as TelemetryEvent;
+          const parsed = JSON.parse(ev.data);
+          // Skip heartbeats and connection confirmations — only buffer
+          // real telemetry events that have a resolution_id and stage.
+          if (!parsed.resolution_id || !parsed.stage) return;
           setEvents((prev) => {
             const next =
               prev.length >= EVENT_BUFFER_CAP
                 ? prev.slice(prev.length - EVENT_BUFFER_CAP + 1)
                 : prev;
-            return [...next, parsed];
+            return [...next, parsed as TelemetryEvent];
           });
         } catch (err) {
           console.warn("telemetry stream: failed to parse event", err);

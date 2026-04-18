@@ -88,7 +88,7 @@ def test_stream_endpoint_registered_and_streams(client):
         first_bytes = ""
         for chunk in resp.iter_text():
             first_bytes += chunk
-            if ": connected" in first_bytes:
+            if '"connected"' in first_bytes:
                 break
 
-        assert ": connected" in first_bytes
+        assert '"type":"connected"' in first_bytes or '"type": "connected"' in first_bytes
