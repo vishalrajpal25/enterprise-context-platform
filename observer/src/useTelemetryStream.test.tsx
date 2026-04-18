@@ -112,7 +112,7 @@ describe("useTelemetryStream", () => {
     expect(fakes[0].closed).toBe(true);
 
     await act(async () => {
-      vi.advanceTimersByTime(300);
+      vi.advanceTimersByTime(600);
     });
     expect(factory).toHaveBeenCalledTimes(2);
     act(() => {

@@ -24,7 +24,7 @@ export interface UseTelemetryStreamResult {
   clear: () => void;
 }
 
-const RECONNECT_DELAYS_MS = [250, 500, 1000, 2000, 5000];
+const RECONNECT_DELAYS_MS = [500, 1000, 2000, 3000, 5000];
 const EVENT_BUFFER_CAP = 2000;
 
 export function useTelemetryStream(
@@ -38,7 +38,8 @@ export function useTelemetryStream(
 
   useEffect(() => {
     let cancelled = false;
-    let source: EventSourceLike | null = null;
+    let abortController: AbortController | null = null;
+    let eventSource: EventSourceLike | null = null;
 
     const buildUrl = () => {
       const params = new URLSearchParams();
@@ -49,49 +50,122 @@ export function useTelemetryStream(
       return `${baseUrl.replace(/\/$/, "")}/api/v1/telemetry/stream${qs ? `?${qs}` : ""}`;
     };
 
-    const connect = () => {
+    const addEvent = (parsed: TelemetryEvent) => {
+      setEvents((prev) => {
+        const next =
+          prev.length >= EVENT_BUFFER_CAP
+            ? prev.slice(prev.length - EVENT_BUFFER_CAP + 1)
+            : prev;
+        return [...next, parsed];
+      });
+    };
+
+    const scheduleReconnect = () => {
+      if (cancelled) return;
+      setState("reconnecting");
+      const delay =
+        RECONNECT_DELAYS_MS[
+          Math.min(attemptRef.current, RECONNECT_DELAYS_MS.length - 1)
+        ];
+      attemptRef.current += 1;
+      timerRef.current = setTimeout(connect, delay);
+    };
+
+    // fetch-based SSE reader — survives connection drops better than EventSource
+    const connectWithFetch = async () => {
+      if (cancelled) return;
+      abortController = new AbortController();
+
+      try {
+        const resp = await fetch(buildUrl(), {
+          signal: abortController.signal,
+          headers: { Accept: "text/event-stream" },
+        });
+
+        if (!resp.ok || !resp.body) {
+          scheduleReconnect();
+          return;
+        }
+
+        setState("open");
+        attemptRef.current = 0;
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          if (cancelled) break;
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop() ?? "";
+
+          for (const part of parts) {
+            const trimmed = part.trim();
+            if (!trimmed || trimmed.startsWith(":")) continue;
+            const dataPrefix = "data: ";
+            const dataLine = trimmed
+              .split("\n")
+              .find((l) => l.startsWith(dataPrefix));
+            if (!dataLine) continue;
+
+            try {
+              const parsed = JSON.parse(dataLine.slice(dataPrefix.length));
+              if (!parsed.resolution_id || !parsed.stage) continue;
+              addEvent(parsed as TelemetryEvent);
+            } catch {
+              // skip unparseable frames
+            }
+          }
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
+      }
+
+      if (!cancelled) scheduleReconnect();
+    };
+
+    // EventSource path — used when a custom factory is provided (tests)
+    const connectWithEventSource = () => {
       if (cancelled) return;
       const url = buildUrl();
-      const factory =
-        eventSourceFactory ??
-        ((u: string) => new EventSource(u) as unknown as EventSourceLike);
-      source = factory(url);
+      const factory = eventSourceFactory!;
+      eventSource = factory(url);
 
-      source.addEventListener("open", () => {
+      eventSource.addEventListener("open", () => {
         attemptRef.current = 0;
         setState("open");
       });
 
-      source.addEventListener("message", (ev) => {
+      eventSource.addEventListener("message", (ev) => {
         try {
           const parsed = JSON.parse(ev.data);
-          // Skip heartbeats and connection confirmations — only buffer
-          // real telemetry events that have a resolution_id and stage.
           if (!parsed.resolution_id || !parsed.stage) return;
-          setEvents((prev) => {
-            const next =
-              prev.length >= EVENT_BUFFER_CAP
-                ? prev.slice(prev.length - EVENT_BUFFER_CAP + 1)
-                : prev;
-            return [...next, parsed as TelemetryEvent];
-          });
-        } catch (err) {
-          console.warn("telemetry stream: failed to parse event", err);
+          addEvent(parsed as TelemetryEvent);
+        } catch {
+          // skip
         }
       });
 
-      source.addEventListener("error", () => {
+      eventSource.addEventListener("error", () => {
         if (cancelled) return;
-        setState("reconnecting");
-        source?.close();
-        source = null;
-        const delay =
-          RECONNECT_DELAYS_MS[
-            Math.min(attemptRef.current, RECONNECT_DELAYS_MS.length - 1)
-          ];
-        attemptRef.current += 1;
-        timerRef.current = setTimeout(connect, delay);
+        eventSource?.close();
+        eventSource = null;
+        scheduleReconnect();
       });
+    };
+
+    const connect = () => {
+      if (cancelled) return;
+      if (eventSourceFactory) {
+        connectWithEventSource();
+      } else {
+        connectWithFetch();
+      }
     };
 
     setState("connecting");
@@ -100,7 +174,8 @@ export function useTelemetryStream(
     return () => {
       cancelled = true;
       if (timerRef.current) clearTimeout(timerRef.current);
-      source?.close();
+      abortController?.abort();
+      eventSource?.close();
       setState("closed");
     };
   }, [baseUrl, apiKey, resolutionId, userId, eventSourceFactory]);
