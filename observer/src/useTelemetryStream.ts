@@ -7,6 +7,7 @@ export interface UseTelemetryStreamOptions {
   baseUrl: string;
   apiKey?: string;
   resolutionId?: string;
+  userId?: string;
   eventSourceFactory?: (url: string) => EventSourceLike;
 }
 
@@ -29,7 +30,7 @@ const EVENT_BUFFER_CAP = 2000;
 export function useTelemetryStream(
   options: UseTelemetryStreamOptions,
 ): UseTelemetryStreamResult {
-  const { baseUrl, apiKey, resolutionId, eventSourceFactory } = options;
+  const { baseUrl, apiKey, resolutionId, userId, eventSourceFactory } = options;
   const [events, setEvents] = useState<TelemetryEvent[]>([]);
   const [state, setState] = useState<ConnectionState>("connecting");
   const attemptRef = useRef(0);
@@ -42,6 +43,7 @@ export function useTelemetryStream(
     const buildUrl = () => {
       const params = new URLSearchParams();
       if (resolutionId) params.set("resolution_id", resolutionId);
+      if (userId) params.set("user_id", userId);
       if (apiKey) params.set("api_key", apiKey);
       const qs = params.toString();
       return `${baseUrl.replace(/\/$/, "")}/api/v1/telemetry/stream${qs ? `?${qs}` : ""}`;
@@ -98,7 +100,7 @@ export function useTelemetryStream(
       source?.close();
       setState("closed");
     };
-  }, [baseUrl, apiKey, resolutionId, eventSourceFactory]);
+  }, [baseUrl, apiKey, resolutionId, userId, eventSourceFactory]);
 
   const clear = () => setEvents([]);
 

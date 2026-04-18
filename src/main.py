@@ -300,17 +300,27 @@ _HEARTBEAT_INTERVAL_SEC = 15.0
 
 
 @app.get("/api/v1/telemetry/stream")
-async def telemetry_stream(http_request: Request, resolution_id: str | None = None):
+async def telemetry_stream(
+    http_request: Request,
+    resolution_id: str | None = None,
+    user_id: str | None = None,
+):
     """Server-Sent Events stream of every TelemetryEvent on the bus.
 
     Observer UIs (observer/) consume this to drive the timeline, DAG, and
     stores panels live. Each event is delivered as a single `data: {json}`
     SSE frame.
 
-    ?resolution_id=rs_... filters the stream to a single resolution.
+    ?resolution_id=rs_... filters to a single resolution.
+    ?user_id=demo_finance_analyst filters to a single user's resolutions
+      (session-scoped tracing — each observer sees only their own traces).
     Heartbeats every 15s keep proxies from killing idle connections.
     """
     _require_api_key(http_request)
+
+    # Track which resolution_ids belong to the filtered user_id so we can
+    # filter subsequent events (only resolution_start carries user_id).
+    user_resolution_ids: set[str] = set()
 
     async def iterator():
         yield ": connected\n\n"
@@ -333,6 +343,19 @@ async def telemetry_stream(http_request: Request, resolution_id: str | None = No
 
                 if resolution_id and event.resolution_id != resolution_id:
                     continue
+
+                # Session-scoped filtering: match user_id from resolution_start events,
+                # then allow all subsequent events for that resolution through.
+                if user_id:
+                    if event.stage == "resolution_start":
+                        event_user = event.payload_summary.get("user_id", "")
+                        if str(event_user) == user_id:
+                            user_resolution_ids.add(event.resolution_id)
+                        else:
+                            continue
+                    elif event.resolution_id not in user_resolution_ids:
+                        continue
+
                 yield event.to_sse()
 
                 now = asyncio.get_event_loop().time()

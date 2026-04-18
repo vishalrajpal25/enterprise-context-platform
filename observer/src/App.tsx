@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTelemetryStream } from "./useTelemetryStream";
 import type { TelemetryEvent } from "./types/events";
 import { ResolutionFlow } from "./components/ResolutionFlow";
@@ -9,6 +9,12 @@ const ECP_BASE_URL =
   (import.meta.env.VITE_ECP_BASE_URL as string | undefined) ?? "";
 const ECP_API_KEY =
   (import.meta.env.VITE_ECP_API_KEY as string | undefined) ?? "";
+
+/** Read ?user_id=X from URL to scope the SSE stream to one user's sessions. */
+function getUserIdFromUrl(): string {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("user_id") ?? "";
+}
 
 function latestResolutionId(events: TelemetryEvent[]): string | null {
   for (let i = events.length - 1; i >= 0; i -= 1) {
@@ -33,15 +39,26 @@ function personaFromEvents(events: TelemetryEvent[]): string | null {
 }
 
 export default function App() {
+  const [sessionUserId, setSessionUserId] = useState(getUserIdFromUrl);
+
   const { events, state } = useTelemetryStream({
     baseUrl: ECP_BASE_URL,
     apiKey: ECP_API_KEY || undefined,
+    userId: sessionUserId || undefined,
   });
 
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
   const [selectedResolutionId, setSelectedResolutionId] = useState<
     string | null
   >(null);
+
+  const handleSetSession = useCallback((uid: string) => {
+    setSessionUserId(uid);
+    const url = new URL(window.location.href);
+    if (uid) url.searchParams.set("user_id", uid);
+    else url.searchParams.delete("user_id");
+    window.history.replaceState({}, "", url.toString());
+  }, []);
 
   const activeId = selectedResolutionId ?? latestResolutionId(events);
   const currentEvents = useMemo(
@@ -101,6 +118,7 @@ export default function App() {
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <SessionInput value={sessionUserId} onChange={handleSetSession} />
           {state === "reconnecting" && (
             <span style={{ fontSize: 12, color: "#fb923c" }}>
               Reconnecting...
@@ -174,6 +192,59 @@ export default function App() {
         />
       </div>
     </div>
+  );
+}
+
+function SessionInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onChange(draft);
+      }}
+      style={{ display: "flex", alignItems: "center", gap: 6 }}
+    >
+      <label style={{ fontSize: 11, color: "#737373" }}>session:</label>
+      <input
+        type="text"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder="all users"
+        style={{
+          background: "#1a1a1a",
+          border: "1px solid #333",
+          color: "#e5e5e5",
+          padding: "3px 8px",
+          borderRadius: 4,
+          fontSize: 12,
+          width: 150,
+          outline: "none",
+        }}
+      />
+      {draft !== value && (
+        <button
+          type="submit"
+          style={{
+            background: "#333",
+            border: "1px solid #555",
+            color: "#e5e5e5",
+            padding: "3px 8px",
+            borderRadius: 4,
+            fontSize: 11,
+            cursor: "pointer",
+          }}
+        >
+          apply
+        </button>
+      )}
+    </form>
   );
 }
 
