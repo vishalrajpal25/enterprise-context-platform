@@ -172,11 +172,19 @@ def _extract_search_user_context(http_request: Request) -> UserContext:
 
 
 def _require_api_key(http_request: Request) -> None:
-    """Require API key when ECP_API_KEY is configured."""
+    """Require API key when ECP_API_KEY is configured.
+
+    Checks the x-ecp-api-key header first, then falls back to the ?api_key
+    query parameter. The fallback is needed because browser EventSource (SSE)
+    cannot set custom headers — the observer UI passes the key as a param.
+    """
     configured = settings.api_key.strip()
     if not configured:
         return
-    provided = http_request.headers.get("x-ecp-api-key", "")
+    provided = (
+        http_request.headers.get("x-ecp-api-key", "")
+        or http_request.query_params.get("api_key", "")
+    )
     if provided != configured:
         raise HTTPException(status_code=401, detail="Unauthorized: invalid API key")
 
