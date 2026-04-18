@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTelemetryStream } from "./useTelemetryStream";
 import type { TelemetryEvent } from "./types/events";
 import { ResolutionFlow } from "./components/ResolutionFlow";
@@ -67,6 +67,13 @@ export default function App() {
     () => (activeId ? events.filter((e) => e.resolution_id === activeId) : []),
     [events, activeId],
   );
+
+  // Debug: log when events change
+  useEffect(() => {
+    if (events.length > 0) {
+      console.log("[ECP App] events=", events.length, "activeId=", activeId, "currentEvents=", currentEvents.length);
+    }
+  }, [events.length, activeId, currentEvents.length]);
 
   const persona = useMemo(() => personaFromEvents(currentEvents), [currentEvents]);
 

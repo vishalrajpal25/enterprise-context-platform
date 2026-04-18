@@ -88,6 +88,10 @@ export function useTelemetryStream(
           (e: Record<string, unknown>) => e.resolution_id && e.stage,
         ) as TelemetryEvent[];
 
+        if (telemetryEvents.length > 0) {
+          console.log("[ECP Observer] poll: seq=", data.seq, "new events=", telemetryEvents.length,
+            "first=", telemetryEvents[0].stage);
+        }
         addEvents(telemetryEvents);
       } catch {
         setState("reconnecting");
