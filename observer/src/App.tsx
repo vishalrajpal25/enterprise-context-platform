@@ -5,8 +5,13 @@ import { ResolutionFlow } from "./components/ResolutionFlow";
 import { DetailPanel } from "./components/DetailPanel";
 import { RecentResolutions } from "./components/RecentResolutions";
 
+// Use empty string (relative URL) in production so requests go through
+// Vercel's rewrite proxy (/api/* → Render), avoiding CORS/EventSource issues.
+// Only use the explicit URL for local dev where Vite's proxy handles it.
 const ECP_BASE_URL =
-  (import.meta.env.VITE_ECP_BASE_URL as string | undefined) ?? "";
+  import.meta.env.DEV
+    ? ((import.meta.env.VITE_ECP_BASE_URL as string | undefined) ?? "")
+    : "";
 const ECP_API_KEY =
   (import.meta.env.VITE_ECP_API_KEY as string | undefined) ?? "";
 
