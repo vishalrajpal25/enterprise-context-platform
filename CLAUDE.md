@@ -66,6 +66,20 @@ Sample data models a Fortune 500 financial data company with:
 6. Tier-1 connector adapters (Snowflake INFORMATION_SCHEMA, dbt manifest.json) — replace the deleted v0.3 stubs with real, async implementations
 7. MCP polish: packaged npm release, install docs
 
+**Done in tree (v4.0):**
+- Everything from v3.0 below, plus:
+- Federation Adapter Layer: ContextSourceAdapter ABC, NativeAdapter, FederationOrchestrator with parallel discovery + budget + conflict resolution (tier-first)
+- Source attribution in ResolveResponse (source_id, source_kind, certification_tier, used_for)
+- Precedent correction as hard override (similarity > 0.85, dept match → overrides resolver choice, confidence 1.0)
+- Structured CorrectionDetail in feedback for propagating human corrections
+- set_persona MCP tool for natural identity switching mid-conversation
+- Absolute quarter parsing (Q4 2019 → fiscal date range) in intent parser + fiscal resolver
+- Enterprise demo scenarios: headcount SLA, cost tribal knowledge, churn low-SLA, FCF cross-domain, APAC Q4 2019 trap
+- Observer UI redesign: vertical resolution flow + detail panel + confidence bars + tribal warnings + recent resolutions
+- Telemetry enrichment: full concept details, warnings, confidence breakdown in SSE events
+- EMEA/Americas region variations seeded for department-specific resolution
+- context_sources registry table for adapter management
+
 **Done in tree (v3.0):**
 - Dual-mode resolution engine (orchestrator + intelligent), decision trace persisted on every call
 - Real fiscal calendar resolver (computes from `datetime.now()` against the calendar config asset)
@@ -77,6 +91,7 @@ Sample data models a Fortune 500 financial data company with:
 - API key + per-session ownership guards on execute / feedback / provenance
 - Anthropic Haiku-4.5 default for intelligent-mode intent parsing, OpenAI swappable
 - MCP stdio server, `/execute` via Cube when `ECP_CUBE_API_URL` set (dry-run otherwise)
+- Telemetry bus + SSE endpoint for live Observer UI
 - pytest + golden eval CI job, security smoke, load smoke
 
 ## Coding Conventions

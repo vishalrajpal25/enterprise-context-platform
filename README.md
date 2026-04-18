@@ -1,160 +1,190 @@
 # Enterprise Context Platform
 
-> The context layer between AI systems and enterprise data. Federates over your existing investments (Microsoft IQ, Snowflake SVA, Glean, Atlan, dbt) or brings its own.
+**The MCP server that resolves business meaning for AI systems.** Not an agent — a context layer that any AI system calls before it touches enterprise data.
 
-The meaning of enterprise data lives outside the data — in definitions that differ between departments, fiscal calendars nobody told the model about, and tribal knowledge only the senior analyst remembers. No single tool (graph, ontology, semantic layer, RAG) solves this alone.
+Semantic layers do math. ECP does meaning. ECP tells the semantic layer *which* math to do, based on who is asking and what the enterprise context says is correct.
 
-ECP resolves business concepts for AI systems over MCP: canonical definitions, fiscal-aware time, tribal knowledge warnings, an execution plan against your semantic layer, and a decision trace for every call. Context maintained as a live service, not generated once and forgotten.
+```
+AI System (Claude / GPT / Copilot / agent / workflow)
+   |  MCP (primary) / REST / gRPC
+   v
+Enterprise Context Platform          <-- one MCP server per estate
+   |
+   +-- Resolution Engine             resolves "APAC revenue last quarter" to canonical definitions
+   +-- Federation Adapter Layer      fans out to your existing context stores
+   +-- Knowledge Graph (Neo4j)       relationships, department variations, lineage
+   +-- Asset Registry (Postgres)     versioned definitions, contracts, tribal knowledge
+   +-- Vector Store (pgvector)       semantic search with ILIKE fallback
+   +-- Decision Trace Store          every resolution persisted for learning and audit
+   +-- OPA Policy Engine             fail-closed authorization
+   +-- Semantic Layer (Cube.js)      deterministic computation against your warehouse
+```
 
-**Semantic layers do math. ECP does meaning.** ECP tells the semantic layer *which* math to do, based on who is asking.
+## The problem
 
-## Why no single tool solves this
+Getting AI systems to answer questions correctly on enterprise data is hard. The meaning of the data lives *outside* the data: definitions that differ between departments, fiscal calendars nobody told the model about, tribal knowledge only the senior analyst remembers. No single tool (graph, ontology, semantic layer, RAG) solves this alone.
 
-Every category in the market right now is being sold as if it were the answer. Each one is genuinely useful, but each is a part.
+ECP extracts that context, keeps it current, and serves it to AI systems with canonical definitions, fiscal-aware time, tribal warnings, an execution plan, and a decision trace for every call.
 
-- **Ontology.** A description of what concepts exist and how they relate. It's a document. It doesn't notice when finance quietly changes the definition of APAC in 2021. It doesn't get tribal knowledge out of the senior analyst's head before she retires. An ontology is a plan, not a worker.
-- **Knowledge graph or graph database.** A storage engine that's good at relationships and traversals. It will happily store "APAC includes ANZ" and "APAC excludes ANZ" as equally valid facts and shrug when an agent asks which is right. A graph is a warehouse, not a factory.
-- **Semantic layer** (Cube, dbt MetricFlow, LookML). Defines metrics deterministically so the math is consistent. But it assumes someone already figured out what the metrics should be, already resolved the conflicts, already accounted for the fiscal calendar and the 2019 data gap. It executes context; it doesn't manufacture it.
-- **Data catalog.** Inventories what you have. It doesn't know what any of it actually means in the way an analyst who's been there ten years means it.
-- **RAG.** Retrieves documents that look relevant and stuffs them into a prompt. It has no concept of canonical meaning, department-specific variation, fiscal time, data quality SLAs, or "this answer was corrected last week, apply the correction."
+## How it works
 
-Each of these is real and useful inside a bigger thing. The bigger thing is not another noun. It's a system that uses all of them, continuously, with feedback and governance, to manufacture and maintain the context that agents need.
+Register ECP as an MCP server. Your AI system gets six tools:
+
+| MCP Tool | What it does |
+|---|---|
+| `set_persona` | Set user identity (department, role) for the session |
+| `resolve_concept` | Resolve a business question to canonical definitions + execution plan |
+| `execute_metric` | Run the resolved plan against the semantic layer |
+| `search_context` | Search the context registry |
+| `get_provenance` | Full decision DAG for any past resolution |
+| `report_feedback` | Accept, correct, or reject a resolution (feeds learning) |
+
+The agent never sees a table name, a SQL fragment, or a schema. That's the semantic firewall: **AI reasons, databases compute.**
+
+## Same question, different correct answers
+
+> **"What was APAC revenue last quarter?"**
+
+| | Finance Analyst | Sales Director |
+|---|---|---|
+| **Metric** | Net Revenue (ASC 606, tier 1) | Gross Revenue (invoiced, tier 2) |
+| **APAC** | Includes AU + NZ | Excludes AU + NZ |
+| **Last quarter** | Q4-FY2026 (Jan-Mar, fiscal year starts April) | Q4-FY2026 (same) |
+| **Warnings** | 3 tribal (data gap, cost center change, FX) | 2 tribal (data gap, FX) |
+| **Confidence** | 0.90 | 0.90 |
+
+Neither is wrong. Context is the product.
+
+## Quick start
+
+```bash
+# Infrastructure
+docker compose up -d          # Neo4j, Postgres+pgvector, Redis
+
+# Initialize and seed
+uv run python scripts/init_db.py
+uv run python scripts/seed_data.py
+
+# Start ECP
+ECP_OPA_DEFAULT_ALLOW=true uv run python -m uvicorn src.main:app --reload --port 8080
+
+# Start the Observer UI (optional, separate terminal)
+cd observer && npm install && npm run dev    # http://localhost:5174
+
+# Verify
+bash scripts/demo_preflight.sh
+```
+
+### Claude Desktop integration
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "enterprise-context-platform": {
+      "command": "node",
+      "args": ["/path/to/enterprise-context-platform/src/protocol/mcp_server.mjs"],
+      "env": {
+        "ECP_BASE_URL": "http://127.0.0.1:8080",
+        "ECP_API_KEY": ""
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop. Say "I'm a finance analyst" then ask any business question.
+
+## Enterprise demo scenarios
+
+| Question | What it showcases |
+|---|---|
+| "What was APAC revenue last quarter?" | Department-specific metric + region + live fiscal calendar |
+| "Revenue for APAC Q4 2019" | Tribal knowledge trap (data 15% underreported) |
+| "APAC cost breakdown last quarter" | Tribal warning fires on non-revenue metric |
+| "What is our headcount trend this year?" | Data contract SLA drives confidence (24h freshness) |
+| "What's the churn rate this quarter vs last?" | Low-quality data source (48h freshness, temporal_validity 0.50) |
+| "FCF yield for my tech book, peer-adjusted" | Cross-domain resolution (3 concepts, department-specific variations) |
+| "Compare EMEA and Americas revenue YTD" | Comparison intent, region variation |
+
+## Observer UI
+
+The Observer (`observer/`) is a live visualization that shows every resolution stage in real time — what stores were queried, what concepts were resolved, what tribal warnings fired, and the full confidence breakdown. Run it alongside Claude Desktop to make the black box transparent.
+
+```
++----------------------------+-----------------------------+
+| Resolution Flow            | Detail Panel                |
+|                            |                             |
+| Parse Intent       2ms  +  | Resolved: net_revenue       |
+| Resolve Concepts  50ms  +  | Definition: ASC 606...      |
+| Tribal Check      25ms  !  | Reasoning: Graph match 1.00 |
+| Precedent          3ms  +  |                             |
+| Authorization      4ms  +  | Confidence Bars:            |
+| Build Plan        15ms  +  | definition    [==========] 1.0  |
+| Persist Trace      2ms  +  | data_quality  [=========.] 0.99 |
+|                            | temporal      [==========] 1.0  |
+| Total: 101ms | Conf: 0.90 | authorization [==========] 1.0  |
++----------------------------+-----------------------------+
+| Recent: rs_...48b (0.90) | rs_...9cf (0.90) | ...       |
++-----------------------------------------------------------+
+```
 
 ## Architecture
 
-> Open [docs/diagrams/architecture.html](docs/diagrams/architecture.html) in a browser for the interactive version.
+**Federation Adapter Layer (v4):** ECP federates over existing context investments. The Resolution Engine queries adapters in parallel with a latency budget; results are merged with source attribution; conflicts are resolved by certification tier, precedent, or disambiguation. Currently ships with `NativeAdapter` (Neo4j + Postgres); external adapters (Fabric IQ, Snowflake SVA, Glean, Atlan, dbt) are the ABC interface, ready to implement.
 
-```
-AI System (Claude / GPT / Copilot / agent / workflow / app)
-   │  MCP stdio  /  REST  /  OSI
-   ▼
-ECP API (FastAPI)
-   │
-   ├─ Resolution Engine (orchestrator | intelligent)
-   │
-   ├─ Federation Adapter Layer (v4)
-   │     ├─ FabricIQAdapter      (MCP)        — Microsoft Fabric IQ ontology
-   │     ├─ SnowflakeSVAAdapter  (API)        — Snowflake Semantic Views
-   │     ├─ GleanAdapter         (API)        — Glean Enterprise Graph
-   │     ├─ AtlanAdapter         (MCP)        — Atlan metadata + lineage
-   │     ├─ DbtAdapter           (OSI)        — dbt MetricFlow definitions
-   │     └─ NativeAdapter        (always on)  — ECP's own stores below
-   │
-   ├─ Knowledge Graph (Neo4j) — relationships, variations, lineage
-   ├─ Asset Registry (Postgres + JSONB) — versioned definitions, contracts, tribal knowledge
-   ├─ Vector Store (Postgres + pgvector) — Voyage or OpenAI embeddings, with honest ILIKE fallback
-   ├─ Decision Trace Store (Postgres) — every resolution, for learning and audit
-   ├─ OPA Policy — fail-closed by default
-   └─ Semantic Layer Executor (Cube.js REST) — deterministic computation against your warehouse
-```
+**Precedent learning:** Every resolution is persisted. When a user corrects a resolution, similar future queries apply the correction as a hard override (similarity > 0.85, department match). The system learns from every interaction without retraining a model.
 
-**Three operating modes:** Federation (federates over existing investments), Hybrid (federates where possible, brings its own for gaps), Standalone (default for the demo, ECP brings its own full stack).
+**Governance:** OPA policy enforcement (fail-closed), per-session ownership guards (no cross-user access to traces), audit log on every authorization decision. ECP is not an access control layer — it's a policy evaluation point that federates entitlements from your existing systems.
 
-## What's in the box (v3.0)
+## Tech stack
 
-| Capability | Status | Source |
-|---|---|---|
-| Dual-mode resolution (orchestrator + intelligent) | real | [src/resolution/engine.py](src/resolution/engine.py) |
-| Live fiscal calendar (`last_quarter` → `Q4-FY2026` from `datetime.now()`) | real | [src/context/fiscal.py](src/context/fiscal.py) |
-| Real graph match scoring (exact / prefix / substring + cert tier + dept variation) | real | [src/context/graph.py](src/context/graph.py) |
-| pgvector cosine search (assets + precedent traces) | real, with ILIKE fallback | [src/context/vector.py](src/context/vector.py), [src/traces/store.py](src/traces/store.py) |
-| Confidence scoring from real data contract SLAs | real | `_contract_quality` in [src/resolution/engine.py](src/resolution/engine.py) |
-| Tribal knowledge surfaced in every resolution | real | seed has 3 entries; [src/context/graph.py](src/context/graph.py) |
-| OPA policy enforcement, fail-closed default | real | [src/governance/policy.py](src/governance/policy.py) |
-| API key + per-session ownership guards | real | [src/main.py](src/main.py) |
-| Audit log on every authorization decision | real | [src/governance/audit.py](src/governance/audit.py) |
-| Decision trace persisted on every resolution | real | [src/traces/store.py](src/traces/store.py) |
-| Cube.js execution (dry-run when unconfigured) | real | [src/semantic/cube_executor.py](src/semantic/cube_executor.py) |
-| MCP stdio server | real | [src/protocol/mcp_server.mjs](src/protocol/mcp_server.mjs) |
-| Anthropic Haiku-4.5 default for intent parsing | real, swappable to OpenAI | [src/resolution/neural.py](src/resolution/neural.py) |
-| Voyage / OpenAI dual-provider embeddings | real, config-driven | [src/context/embeddings.py](src/context/embeddings.py) |
-| Static touch-and-feel demo page | real | [docs/demo/index.html](docs/demo/index.html) |
+- Python 3.11, FastAPI, asyncpg, neo4j async driver
+- Neo4j 5.x (knowledge graph), PostgreSQL 16 + pgvector (registry + traces), Redis (cache)
+- Anthropic Claude Haiku 4.5 for neural intent parsing (optional, orchestrator mode is deterministic)
+- Voyage AI or OpenAI for embeddings (optional, falls back to ILIKE)
+- Node.js MCP SDK for the stdio server
+- Vite + React + TypeScript for the Observer UI
+- Docker Compose for local dev
 
-## What's still aspirational
+## Environment variables
 
-- Real telemetry-based freshness (currently uses the SLA from the data contract, not observed lag — see [CLAUDE.md](CLAUDE.md))
-- Drift detection service (was a stub; removed in v3 until real)
-- Snowflake / dbt / Looker connector adapters (the v0.x stubs were sync inside an async app — deleted in v3)
-- OSI Bridge for import/export across semantic tools
-
-We removed the broken or unimplemented surfaces rather than ship them dressed up.
-
-## Quick start (local)
-
-```bash
-docker compose up -d
-python scripts/init_db.py
-python scripts/seed_data.py        # uses VOYAGE_API_KEY or OPENAI_API_KEY for embeddings if set
-uvicorn src.main:app --reload --port 8080
-python scripts/demo.py             # canonical resolution flow
-```
-
-Open [docs/demo/index.html](docs/demo/index.html) directly in a browser, or serve it with `python -m http.server` from `docs/demo/` — it talks to `http://localhost:8080` by default. Pass `?api=https://your-deploy.example.com` to point it elsewhere.
-
-For a richer, guided end-user flow (governance, entitlement, latency, provenance, execution, feedback), use [docs/demo/studio.html](docs/demo/studio.html). A presenter-friendly script is in [docs/demo/DEMO-RUNBOOK.md](docs/demo/DEMO-RUNBOOK.md).
-
-> In **federation mode**, configure adapters in `config/adapters.yaml` (planned in v4 — see `docs/enterprise-context-platform-spec-v4.md` §1.3). In **standalone mode** (default for the demo), ECP uses its own Neo4j + PostgreSQL stores via `NativeAdapter`.
-
-### Environment variables
-
-| Var | Default | Notes |
+| Variable | Default | Notes |
 |---|---|---|
 | `ECP_RESOLUTION_MODE` | `orchestrator` | `intelligent` enables LLM intent parsing |
-| `ECP_DEMO_MODE` | `false` | Set `true` for public sandbox: prints banner, opens CORS |
-| `ECP_API_KEY` | unset | When set, every API call needs `x-ecp-api-key` |
-| `ECP_OPA_DEFAULT_ALLOW` | `false` (fail-closed) | Set `true` *only* for the public demo with no OPA |
-| `ECP_SEARCH_REQUIRE_IDENTITY` | `true` | Anonymous search returns empty when true |
-| `ECP_EMBEDDING_PROVIDER` | `voyage` | `voyage` \| `openai` \| `none` |
-| `ECP_EMBEDDING_MODEL` | provider default | `voyage-3-lite` (512d) or `text-embedding-3-small` (1536d) |
-| `ECP_EMBEDDING_DIM` | `512` | Must match the active provider; re-run `init_db.py` after changing |
-| `ECP_VOYAGE_API_KEY` | unset | Free tier at voyageai.com — no card required |
-| `ECP_OPENAI_API_KEY` | unset | Pay-per-use, ~$0.05 lifetime at demo scale |
-| `ECP_ANTHROPIC_API_KEY` | unset | Used by intelligent mode for intent parsing |
-| `ECP_LLM_MODEL` | `claude-haiku-4-5-20251001` | Override to `claude-sonnet-4-6` for harder reasoning |
+| `ECP_API_KEY` | unset | When set, every request needs `x-ecp-api-key` |
+| `ECP_OPA_DEFAULT_ALLOW` | `false` | Set `true` only for demos without OPA deployed |
+| `ECP_EMBEDDING_PROVIDER` | `voyage` | `voyage` / `openai` / `none` |
+| `ECP_VOYAGE_API_KEY` | unset | Free tier at voyageai.com |
 | `ECP_CUBE_API_URL` | unset | When set, `/execute` calls Cube; else dry-run |
-| `ECP_NEO4J_URI` / `ECP_POSTGRES_DSN` / `ECP_REDIS_URL` | local Docker | Override for hosted backends |
+| `ECP_NEO4J_URI` | `bolt://localhost:7687` | Override for hosted Neo4j (Aura) |
+| `ECP_POSTGRES_DSN` | `postgresql://ecp:ecp_local_dev@localhost:5432/ecp` | Override for hosted Postgres (Neon) |
 
-When no embedding key is set, the system logs a startup warning and degrades to ILIKE text search transparently. It never silently fakes a vector.
+## API endpoints
 
-## Demo scenario
+| Endpoint | MCP Tool | Purpose |
+|---|---|---|
+| `POST /api/v1/resolve` | `resolve_concept` | Resolve concept to definitions + plan + DAG |
+| `POST /api/v1/execute` | `execute_metric` | Run plan via semantic layer |
+| `POST /api/v1/feedback` | `report_feedback` | Record feedback, feed learning loop |
+| `POST /api/v1/search` | `search_context` | Search context registry |
+| `GET /api/v1/provenance/{id}` | `get_provenance` | Full decision trace |
+| `GET /api/v1/telemetry/stream` | — | SSE stream for Observer UI |
+| `GET /health` | — | Health check |
 
-> **"Show me free cash flow yield for my tech book over the last 8 quarters, peer-adjusted."**
->
-> Same question, two users, two different correct answers — with full provenance on why.
-> Open [docs/diagrams/trace.html](docs/diagrams/trace.html) to see the animated resolution flow, or [docs/diagrams/comparison.html](docs/diagrams/comparison.html) for the side-by-side persona comparison.
+## Deployment
 
-The seed models a Fortune 500 financial data company:
-
-- **Revenue** has 3 definitions (net / gross / run-rate) varying by department
-- **APAC** has 2 region definitions (finance includes ANZ, sales excludes ANZ)
-- **Fiscal calendar** starts in April. "Last quarter" resolves *live* against `datetime.now()`
-- **Tribal knowledge**: Q4 2019 APAC data gap, APAC cost-center change in 2021, FX rate gotcha
-- **Data contracts** with real SLA values feeding confidence scoring
-- New in v3: `headcount`, `cost`, `retention`, `region_americas` so the golden eval has full coverage
-
-## API endpoints (1:1 with MCP tools)
-
-| | |
-|---|---|
-| `POST /api/v1/resolve` | Resolve concept → canonical defs + execution plan + DAG + tribal warnings + confidence |
-| `POST /api/v1/execute` | Run a stored resolution against Cube.js (or dry-run) |
-| `POST /api/v1/feedback` | Record `accepted` / `corrected` / `rejected` — feeds precedent learning |
-| `POST /api/v1/search` | Search the registry (cosine if embeddings available, ILIKE otherwise) |
-| `GET  /api/v1/provenance/{id}` | Full DAG, stores queried, definitions selected, execution plan |
-| `GET  /health` | `{status, mode, demo_mode, embedding_available}` |
-| `GET  /health/ready` | All backend ping checks |
-| `GET  /admin/keep-warm` | Cheap endpoint for uptime monitors |
+See [docs/DEPLOY.md](docs/DEPLOY.md) for Render + Neon + Neo4j Aura deployment guide.
 
 ## Tests
 
 ```bash
-uv pip install --python .venv/bin/python -e ".[dev]"
-PYTHONPATH=. .venv/bin/python -m pytest tests/ -q
-.venv/bin/ruff check src tests
+uv run python -m pytest tests/ -q     # 54 tests
+cd observer && npm test                 # 4 tests
+cd observer && npm run build            # TypeScript + Vite build
 ```
-
-CI runs ruff, pytest, the golden eval suite (13 reference queries), a security smoke (IDOR + API key), and a load smoke (p95 budget). See [.github/workflows/ci.yml](.github/workflows/ci.yml).
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE). [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow.
+Apache 2.0 — see [LICENSE](LICENSE).
