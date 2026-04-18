@@ -1,7 +1,9 @@
-import { useMemo } from "react";
-import { TimelinePanel } from "./components/TimelinePanel";
+import { useMemo, useState } from "react";
 import { useTelemetryStream } from "./useTelemetryStream";
 import type { TelemetryEvent } from "./types/events";
+import { ResolutionFlow } from "./components/ResolutionFlow";
+import { DetailPanel } from "./components/DetailPanel";
+import { RecentResolutions } from "./components/RecentResolutions";
 
 const ECP_BASE_URL =
   (import.meta.env.VITE_ECP_BASE_URL as string | undefined) ?? "";
@@ -16,53 +18,161 @@ function latestResolutionId(events: TelemetryEvent[]): string | null {
   return events[events.length - 1]?.resolution_id ?? null;
 }
 
+function personaFromEvents(events: TelemetryEvent[]): string | null {
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    if (events[i].stage === "resolution_start") {
+      const ps = events[i].payload_summary;
+      const user = ps.user_id as string | undefined;
+      const dept = ps.department as string | undefined;
+      if (user || dept) {
+        return [user, dept].filter(Boolean).join(" / ");
+      }
+    }
+  }
+  return null;
+}
+
 export default function App() {
   const { events, state } = useTelemetryStream({
     baseUrl: ECP_BASE_URL,
     apiKey: ECP_API_KEY || undefined,
   });
 
-  const currentId = useMemo(() => latestResolutionId(events), [events]);
+  const [selectedStage, setSelectedStage] = useState<string | null>(null);
+  const [selectedResolutionId, setSelectedResolutionId] = useState<
+    string | null
+  >(null);
+
+  const activeId = selectedResolutionId ?? latestResolutionId(events);
   const currentEvents = useMemo(
-    () => (currentId ? events.filter((e) => e.resolution_id === currentId) : []),
-    [events, currentId],
+    () => (activeId ? events.filter((e) => e.resolution_id === activeId) : []),
+    [events, activeId],
   );
+
+  const persona = useMemo(() => personaFromEvents(currentEvents), [currentEvents]);
+
+  const handleSelectResolution = (id: string) => {
+    setSelectedResolutionId(id);
+    setSelectedStage(null);
+  };
 
   return (
     <div
       style={{
         fontFamily:
           "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
-        background: "#0f1115",
-        color: "#e6eaf2",
-        minHeight: "100vh",
-        padding: 20,
+        background: "#0f0f0f",
+        color: "#e5e5e5",
+        height: "100vh",
+        display: "grid",
+        gridTemplateRows: "60px 1fr 80px",
+        gridTemplateColumns: "55% 45%",
+        overflow: "hidden",
       }}
     >
+      {/* Header */}
       <header
         style={{
+          gridColumn: "1 / -1",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: 18,
+          padding: "0 20px",
+          borderBottom: "1px solid #262626",
         }}
       >
-        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
-          ECP Observer{" "}
-          <span style={{ color: "#6e7686", fontWeight: 400 }}>
-            {"\u2014"} live resolutions
-          </span>
-        </h1>
-        <ConnectionBadge state={state} />
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
+            ECP Resolution Observer
+          </h1>
+          {persona && (
+            <span
+              style={{
+                fontSize: 12,
+                color: "#a3a3a3",
+                background: "#1a1a1a",
+                padding: "3px 10px",
+                borderRadius: 6,
+                border: "1px solid #333",
+              }}
+            >
+              {persona}
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {state === "reconnecting" && (
+            <span style={{ fontSize: 12, color: "#fb923c" }}>
+              Reconnecting...
+            </span>
+          )}
+          <ConnectionBadge state={state} />
+        </div>
       </header>
-      <TimelinePanel resolutionId={currentId} events={currentEvents} />
-      {state === "reconnecting" && <ReconnectBanner />}
-      {!currentId && (
-        <p style={{ color: "#6e7686", marginTop: 16, fontSize: 13 }}>
-          Fire a resolution from Claude Desktop or{" "}
-          <code>scripts/demo.py</code> to see stages light up here.
-        </p>
-      )}
+
+      {/* Left: Resolution Flow */}
+      <div
+        style={{
+          padding: 16,
+          overflowY: "auto",
+          borderRight: "1px solid #262626",
+        }}
+      >
+        {currentEvents.length > 0 ? (
+          <ResolutionFlow
+            events={currentEvents}
+            selectedStage={selectedStage}
+            onSelectStage={setSelectedStage}
+          />
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: "100%",
+              color: "#6b7280",
+              fontSize: 13,
+            }}
+          >
+            <p>
+              Fire a resolution from Claude Desktop or{" "}
+              <code style={{ background: "#1a1a1a", padding: "2px 6px", borderRadius: 4 }}>
+                scripts/demo.py
+              </code>{" "}
+              to see stages light up here.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Right: Detail Panel */}
+      <div
+        style={{
+          padding: 0,
+          overflowY: "auto",
+          background: "#141414",
+        }}
+      >
+        <DetailPanel selectedStage={selectedStage} events={currentEvents} />
+      </div>
+
+      {/* Bottom: Recent Resolutions */}
+      <div
+        style={{
+          gridColumn: "1 / -1",
+          padding: "0 16px",
+          borderTop: "1px solid #262626",
+          background: "#0f0f0f",
+          overflowX: "auto",
+        }}
+      >
+        <RecentResolutions
+          events={events}
+          selectedId={activeId}
+          onSelect={handleSelectResolution}
+        />
+      </div>
     </div>
   );
 }
@@ -70,43 +180,24 @@ export default function App() {
 function ConnectionBadge({ state }: { state: string }) {
   const color =
     state === "open"
-      ? "#2f9e44"
+      ? "#4ade80"
       : state === "reconnecting"
-        ? "#e67700"
-        : "#6e7686";
+        ? "#fb923c"
+        : "#6b7280";
   return (
     <span
       style={{
-        background: "#1a1d24",
         border: `1px solid ${color}`,
         color,
-        padding: "4px 10px",
+        padding: "3px 10px",
         borderRadius: 999,
-        fontSize: 12,
+        fontSize: 11,
         textTransform: "uppercase",
-        letterSpacing: 0.6,
+        letterSpacing: 0.5,
+        fontWeight: 600,
       }}
     >
       {state}
     </span>
-  );
-}
-
-function ReconnectBanner() {
-  return (
-    <div
-      role="alert"
-      style={{
-        marginTop: 12,
-        padding: "8px 12px",
-        background: "#3a2a12",
-        border: "1px solid #e67700",
-        color: "#ffd8a8",
-        borderRadius: 6,
-        fontSize: 13,
-      }}
-    >
-      Stream dropped {"\u2014"} attempting to reconnect{"\u2026"}
-    </div>
   );
 }

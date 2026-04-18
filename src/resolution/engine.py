@@ -168,6 +168,9 @@ class ResolutionEngine:
                     payload_summary=truncate_payload({
                         "concept_type": concept_type,
                         "resolved_id": rc.resolved_id,
+                        "resolved_name": rc.resolved_name,
+                        "definition": rc.definition,
+                        "reasoning": rc.reasoning,
                         "confidence": rc.confidence,
                     }),
                 ))
@@ -198,6 +201,11 @@ class ResolutionEngine:
                 payload_summary=truncate_payload({
                     "warnings_found": len(warnings),
                     "ids": [w.id for w in warnings],
+                    "warnings": [
+                        {"id": w.id, "description": w.description, "severity": w.severity,
+                         "impact": w.impact, "workaround": w.workaround}
+                        for w in warnings
+                    ],
                 }),
             ))
 
@@ -396,9 +404,21 @@ class ResolutionEngine:
                 payload_summary=truncate_payload({
                     "status": response.status,
                     "confidence_overall": response.confidence.overall,
+                    "confidence": {
+                        "definition": response.confidence.definition,
+                        "data_quality": response.confidence.data_quality,
+                        "temporal_validity": response.confidence.temporal_validity,
+                        "authorization": response.confidence.authorization,
+                        "completeness": response.confidence.completeness,
+                        "overall": response.confidence.overall,
+                    },
                     "warnings": len(response.warnings),
                     "precedents": len(response.precedents_used),
                     "plan_steps": len(response.execution_plan),
+                    "source_attribution": [
+                        {"source_id": s.source_id, "source_kind": s.source_kind, "used_for": s.used_for}
+                        for s in (response.source_attribution or [])
+                    ],
                 }),
             ))
 

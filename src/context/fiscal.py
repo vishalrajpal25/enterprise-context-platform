@@ -151,6 +151,30 @@ def resolve(
             "resolved_at": (now or datetime.utcnow()).isoformat(),
         }
     else:
+        # Handle absolute quarter references (e.g., q4_2019 → fiscal Q4 of CY2019)
+        m_abs = re.match(r"q(\d)_(\d{4})", time_id)
+        if m_abs:
+            q_index = int(m_abs.group(1))
+            calendar_year = int(m_abs.group(2))
+            # Compute the fiscal year that contains this calendar quarter.
+            # For fiscal start April: calendar Q4 (Oct-Dec) is in FY that ends
+            # next year, calendar Q1 (Jan-Mar) is in the FY ending this year.
+            # Use the first month of the calendar quarter to derive fy.
+            cal_month = (q_index - 1) * 3 + 1  # Q1→Jan, Q2→Apr, Q3→Jul, Q4→Oct
+            ref_date = date(calendar_year, cal_month, 1)
+            fy = _fy_for(ref_date, sm)
+            fq = _quarter_index(ref_date, sm)
+            start, end = _quarter_bounds(fy, fq, sm)
+            fy_label, q_label = _format_label(fy, fq, label_template)
+            return {
+                "dimension": fiscal.dimension,
+                "range": [start.isoformat(), end.isoformat()],
+                "label": f"{q_label}-{fy_label} (calendar Q{q_index} {calendar_year})",
+                "fiscal_year": fy_label,
+                "fiscal_quarter": q_label,
+                "resolved_at": (now or datetime.utcnow()).isoformat(),
+            }
+
         # Handle "last_N_quarters" pattern (e.g., last_8_quarters)
         m = re.match(r"last_(\d+)_quarters?", time_id)
         if m:

@@ -15,12 +15,19 @@ import * as z from "zod";
 
 const BASE = (process.env.ECP_BASE_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
 
+// Session-level persona — set via the set_persona tool.
+// Overrides env-var defaults so users can switch identity mid-conversation.
+let sessionPersona = { user_id: null, department: null, role: null };
+
 function baseHeaders() {
   const h = { "Content-Type": "application/json", Accept: "application/json" };
   if (process.env.ECP_API_KEY) h["x-ecp-api-key"] = process.env.ECP_API_KEY;
-  if (process.env.ECP_USER_ID) h["x-ecp-user-id"] = process.env.ECP_USER_ID;
-  if (process.env.ECP_DEPARTMENT) h["x-ecp-department"] = process.env.ECP_DEPARTMENT;
-  if (process.env.ECP_ROLE) h["x-ecp-role"] = process.env.ECP_ROLE;
+  const uid = sessionPersona.user_id || process.env.ECP_USER_ID;
+  const dept = sessionPersona.department || process.env.ECP_DEPARTMENT;
+  const role = sessionPersona.role || process.env.ECP_ROLE;
+  if (uid) h["x-ecp-user-id"] = uid;
+  if (dept) h["x-ecp-department"] = dept;
+  if (role) h["x-ecp-role"] = role;
   return h;
 }
 
@@ -67,13 +74,41 @@ async function api(path, { method = "GET", body, headers = {} } = {}) {
 
 const mcpServer = new McpServer({
   name: "enterprise-context-platform",
-  version: "3.0.0",
+  version: "4.0.0",
+  description: "Enterprise Context Platform — the MCP server that resolves business concepts to canonical definitions, execution plans, and decision traces. Not an agent — a context layer that any AI system calls before touching enterprise data.",
 });
+
+mcpServer.registerTool(
+  "set_persona",
+  {
+    description:
+      "Set the user identity for this ECP session. Call this before any other ECP tool to establish who is asking. " +
+      "In production, identity comes from SSO; in demos, use this tool. " +
+      "user_id examples: 'demo_finance_analyst', 'demo_sales_director'. " +
+      "department examples: 'finance', 'sales', 'equity_research', 'portfolio_management'. " +
+      "role examples: 'analyst', 'director', 'vp', 'pm'.",
+    inputSchema: {
+      user_id: z.string().describe("User identifier"),
+      department: z.string().describe("Department: finance, sales, equity_research, portfolio_management, etc."),
+      role: z.string().describe("Role: analyst, director, vp, pm, etc."),
+    },
+  },
+  async ({ user_id, department, role }) => {
+    sessionPersona = { user_id, department, role };
+    return jsonText({
+      status: "persona_set",
+      user_id,
+      department,
+      role,
+      message: `Identity set to ${user_id} (${department}/${role}). All subsequent ECP calls will use this identity.`,
+    });
+  },
+);
 
 mcpServer.registerTool(
   "resolve_concept",
   {
-    description: "Resolve a business concept to canonical definitions and an execution plan (ECP POST /api/v1/resolve).",
+    description: "Resolve a business concept to canonical definitions, execution plan, and decision trace via the Enterprise Context Platform. This MCP tool resolves meaning — which metric, which definition, which time period — so AI systems never guess. Call set_persona first to establish user identity.",
     inputSchema: {
       concept: z.string().describe("Natural language concept, e.g. APAC revenue last quarter"),
       user_id: z.string().optional().describe("Overrides ECP_USER_ID for this call"),

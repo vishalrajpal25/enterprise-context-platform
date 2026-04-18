@@ -208,6 +208,20 @@ ASSETS = [
         }
     },
     {
+        "id": "mt_churn_rate",
+        "type": "metric_definition",
+        "content": {
+            "name": "churn_rate",
+            "canonical_name": "customer_churn_rate",
+            "semantic_layer_ref": "cube.customer.Churn.rate",
+            "measure": "Churn.rate",
+            "definition": "Customer churn rate — percentage of customers lost over period",
+            "certification_tier": 2,
+            "owner": "customer_success@company.com",
+            "source_table": "analytics.customer.fact_retention_monthly"
+        }
+    },
+    {
         "id": "gl_americas",
         "type": "glossary_term",
         "content": {
@@ -644,7 +658,7 @@ CREATE (br:Metric {id: 'budget_net_revenue', name: 'Budget Net Revenue', descrip
 CREATE (hc:Metric {id: 'headcount', name: 'Headcount', description: 'Active employee count as of period end', semantic_layer_ref: 'cube.people.Headcount.count', asset_registry_id: 'mt_headcount', certification_tier: 1, owner: 'people_ops@company.com'})
 CREATE (cost:Metric {id: 'cost', name: 'Operating Cost', description: 'Total operating cost (COGS + OpEx)', semantic_layer_ref: 'cube.finance.Cost.operatingCost', asset_registry_id: 'mt_cost', certification_tier: 1, owner: 'finance_operations@company.com'})
 CREATE (ret:Metric {id: 'retention', name: 'Customer Retention Rate', description: '1 - logo churn rate over trailing 12 months', semantic_layer_ref: 'cube.customer.Retention.rate', asset_registry_id: 'mt_retention', certification_tier: 2, owner: 'customer_success@company.com'})
-CREATE (chr:Metric {id: 'churn_rate', name: 'Customer Churn Rate', description: 'Customer churn rate', semantic_layer_ref: 'cube.customer.Churn.rate', asset_registry_id: 'gl_churn', certification_tier: 2, owner: 'customer_success@company.com'})
+CREATE (chr:Metric {id: 'churn_rate', name: 'Customer Churn Rate', description: 'Customer churn rate', semantic_layer_ref: 'cube.customer.Churn.rate', asset_registry_id: 'mt_churn_rate', certification_tier: 2, owner: 'customer_success@company.com'})
 CREATE (rev:GlossaryTerm {id: 'revenue', canonical_name: 'revenue', definition: 'Income from normal business operations', asset_registry_id: 'gl_revenue'})
 CREATE (rev_fin:GlossaryTerm {id: 'revenue_finance', canonical_name: 'net_revenue', definition: 'Recognized revenue per ASC 606 minus refunds', context: 'finance'})
 CREATE (rev_sales:GlossaryTerm {id: 'revenue_sales', canonical_name: 'gross_revenue', definition: 'Total invoiced revenue before adjustments', context: 'sales'})
@@ -652,7 +666,10 @@ CREATE (apac:Entity {id: 'region_apac', name: 'APAC', domain: 'geography', descr
 CREATE (apac_fin:Entity {id: 'region_apac_finance', name: 'APAC (Finance)', domain: 'geography', description: 'APAC including ANZ', values: ['JP','KR','SG','HK','TW','AU','NZ','IN','CN']})
 CREATE (apac_sales:Entity {id: 'region_apac_sales', name: 'APAC (Sales)', domain: 'geography', description: 'APAC excluding ANZ', values: ['JP','KR','SG','HK','TW','IN','CN']})
 CREATE (emea:Entity {id: 'region_emea', name: 'EMEA', domain: 'geography', description: 'Europe, Middle East and Africa'})
+CREATE (emea_fin:Entity {id: 'region_emea_finance', name: 'EMEA (Finance)', domain: 'geography', description: 'EMEA for finance reporting', values: ['GB','DE','FR','IT','ES','NL','CH','SE','NO']})
+CREATE (emea_sales:Entity {id: 'region_emea_sales', name: 'EMEA (Sales)', domain: 'geography', description: 'EMEA for sales territories including Middle East', values: ['GB','DE','FR','IT','ES','NL','CH','SE','NO','AE']})
 CREATE (americas:Entity {id: 'region_americas', name: 'Americas', domain: 'geography', description: 'North, Central and South America', values: ['US','CA','MX','BR','AR','CL','CO']})
+CREATE (americas_fin:Entity {id: 'region_americas_finance', name: 'Americas (Finance)', domain: 'geography', description: 'Americas for finance reporting', values: ['US','CA','MX','BR','AR','CL','CO']})
 CREATE (t_rev:Table {id: 'analytics.finance.fact_revenue_daily', schema_name: 'finance', name: 'fact_revenue_daily', platform: 'snowflake'})
 CREATE (t_budget:Table {id: 'analytics.planning.fact_budget', schema_name: 'planning', name: 'fact_budget', platform: 'snowflake'})
 CREATE (c_amount:Column {id: 'fact_revenue_daily.amount', table_id: 'analytics.finance.fact_revenue_daily', name: 'amount', data_type: 'DECIMAL(18,2)'})
@@ -668,6 +685,9 @@ CREATE (rev_fin)-[:DESCRIBES]->(nr)
 CREATE (rev_sales)-[:DESCRIBES]->(gr)
 CREATE (apac)-[:HAS_VARIATION {context: 'finance'}]->(apac_fin)
 CREATE (apac)-[:HAS_VARIATION {context: 'sales'}]->(apac_sales)
+CREATE (emea)-[:HAS_VARIATION {context: 'finance'}]->(emea_fin)
+CREATE (emea)-[:HAS_VARIATION {context: 'sales'}]->(emea_sales)
+CREATE (americas)-[:HAS_VARIATION {context: 'finance'}]->(americas_fin)
 CREATE (nr)-[:COMPUTED_FROM {logic: 'SUM(amount) WHERE type=recognized AND refunded=false'}]->(c_amount)
 CREATE (gr)-[:COMPUTED_FROM {logic: 'SUM(amount) WHERE type IN (recognized, invoiced)'}]->(c_amount)
 CREATE (nr)-[:USES_DIMENSION]->(c_region)
@@ -676,6 +696,7 @@ CREATE (c_region)-[:BELONGS_TO]->(t_rev)
 CREATE (tk1)-[:AFFECTS]->(nr)
 CREATE (tk1)-[:AFFECTS]->(gr)
 CREATE (tk2)-[:AFFECTS]->(nr)
+CREATE (tk2)-[:AFFECTS]->(cost)
 CREATE (tk3)-[:AFFECTS]->(nr)
 CREATE (tk3)-[:AFFECTS]->(gr)
 CREATE (nr)-[:HAS_KNOWN_ISSUE]->(tk1)
@@ -683,6 +704,7 @@ CREATE (nr)-[:HAS_KNOWN_ISSUE]->(tk2)
 CREATE (nr)-[:HAS_KNOWN_ISSUE]->(tk3)
 CREATE (gr)-[:HAS_KNOWN_ISSUE]->(tk1)
 CREATE (gr)-[:HAS_KNOWN_ISSUE]->(tk3)
+CREATE (cost)-[:HAS_KNOWN_ISSUE]->(tk2)
 
 // --- FCF Yield nodes ---
 CREATE (fcf:Metric {id: 'fcf_yield', name: 'Free Cash Flow Yield', description: 'Free cash flow yield — FCF divided by market cap or enterprise value depending on context', semantic_layer_ref: 'cube.finance.CashFlow.fcfYield', asset_registry_id: 'mt_fcf_yield', certification_tier: 1, owner: 'equity_research@company.com'})

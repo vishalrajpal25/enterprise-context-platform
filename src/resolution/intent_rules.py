@@ -19,6 +19,7 @@ METRIC_KEYWORDS: dict[str, str] = {
     "revenue": "revenue", "sales": "revenue", "income": "revenue",
     "cost": "cost", "expense": "cost", "spend": "cost",
     "headcount": "headcount", "employees": "headcount", "staff": "headcount",
+    "churn rate": "churn_rate",
     "churn": "churn", "attrition": "churn",
     "retention": "retention",
 }
@@ -61,6 +62,8 @@ ADJUSTMENT_KEYWORDS: dict[str, str] = {
 
 # Regex for "last N quarters" pattern
 _LAST_N_QUARTERS_RE = re.compile(r"last (\d+) quarters?")
+# Regex for absolute quarter references like "Q4 2019" or "Q1 2025"
+_ABSOLUTE_QUARTER_RE = re.compile(r"q([1-4])\s*(\d{4})", re.IGNORECASE)
 
 
 def parse_intent_rules(query: str) -> ParsedIntent:
@@ -82,9 +85,12 @@ def parse_intent_rules(query: str) -> ParsedIntent:
             concepts["dimension"] = region
             break
 
-    # Time: check "last N quarters" pattern first, then fixed phrases
+    # Time: check patterns in order — absolute quarter, last N quarters, fixed phrases
+    m_abs = _ABSOLUTE_QUARTER_RE.search(query_lower)
     m = _LAST_N_QUARTERS_RE.search(query_lower)
-    if m:
+    if m_abs:
+        concepts["time"] = f"q{m_abs.group(1)}_{m_abs.group(2)}"
+    elif m:
         concepts["time"] = f"last_{m.group(1)}_quarters"
     else:
         # Longest match first so "last quarter" beats "quarter".

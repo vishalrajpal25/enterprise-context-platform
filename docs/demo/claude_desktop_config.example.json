@@ -1,40 +1,20 @@
 {
-  "_comment_1": "Claude Desktop MCP config for the ECP demo. Copy the contents of this file to:",
+  "_comment_1": "Claude Desktop MCP config for the ECP demo. Merge the mcpServers block into your existing config at:",
   "_comment_2": "  macOS:   ~/Library/Application Support/Claude/claude_desktop_config.json",
-  "_comment_3": "  Windows: %APPDATA%\\Claude\\claude_desktop_config.json",
-  "_comment_4": "After saving, fully quit and relaunch Claude Desktop (Cmd+Q, not just close the window).",
-  "_comment_5": "Replace ABSOLUTE_PATH_TO_REPO with the real path to your enterprise-context-platform checkout,",
-  "_comment_6": "e.g. /Users/you/Documents/projects/enterprise-context-platform.",
-  "_comment_7": "Set ECP_BASE_URL to your ECP endpoint. Leave as http://127.0.0.1:8080 when running the stack locally;",
-  "_comment_8": "change to your hosted URL (e.g. https://ecp.internal.example.com) when demoing against a shared instance.",
-  "_comment_9": "Set ECP_API_KEY only if the ECP server has api_key configured. Leave empty otherwise.",
+  "_comment_3": "After saving, fully quit and relaunch Claude Desktop (Cmd+Q, not just close the window).",
+  "_comment_4": "Replace ABSOLUTE_PATH_TO_REPO with the real path, e.g. /Users/you/projects/enterprise-context-platform.",
+  "_comment_5": "Identity is set at runtime via the set_persona tool — no user/department/role env vars needed.",
+  "_comment_6": "Set ECP_API_KEY only if the ECP server requires it. Leave empty for local dev.",
 
   "mcpServers": {
-    "ecp-finance-analyst": {
+    "enterprise-context-platform": {
       "command": "node",
       "args": [
         "ABSOLUTE_PATH_TO_REPO/src/protocol/mcp_server.mjs"
       ],
       "env": {
         "ECP_BASE_URL": "http://127.0.0.1:8080",
-        "ECP_API_KEY": "",
-        "ECP_USER_ID": "demo_finance_analyst",
-        "ECP_DEPARTMENT": "finance",
-        "ECP_ROLE": "analyst"
-      }
-    },
-
-    "ecp-sales-director": {
-      "command": "node",
-      "args": [
-        "ABSOLUTE_PATH_TO_REPO/src/protocol/mcp_server.mjs"
-      ],
-      "env": {
-        "ECP_BASE_URL": "http://127.0.0.1:8080",
-        "ECP_API_KEY": "",
-        "ECP_USER_ID": "demo_sales_director",
-        "ECP_DEPARTMENT": "sales",
-        "ECP_ROLE": "director"
+        "ECP_API_KEY": ""
       }
     }
   }

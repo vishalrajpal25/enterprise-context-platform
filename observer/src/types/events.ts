@@ -57,6 +57,32 @@ export const TIMELINE_STAGES: TelemetryStage[] = [
   "persist_trace",
 ];
 
+export interface ConceptPayload {
+  concept_type: string;
+  resolved_id: string;
+  confidence: number;
+  resolved_name?: string;
+  definition?: string;
+  reasoning?: string;
+}
+
+export interface TribalWarningPayload {
+  id: string;
+  description: string;
+  severity: string;
+  impact: string;
+  workaround: string;
+}
+
+export interface ConfidenceBreakdown {
+  definition: number;
+  data_quality: number;
+  temporal_validity: number;
+  authorization: number;
+  completeness: number;
+  overall: number;
+}
+
 export const STAGE_LABELS: Record<TelemetryStage, string> = {
   parse_intent: "Parse Intent",
   resolve_concept: "Resolve Concepts",
