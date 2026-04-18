@@ -388,6 +388,26 @@ async def telemetry_stream(
     )
 
 
+@app.get("/api/v1/telemetry/poll")
+async def telemetry_poll(
+    http_request: Request,
+    after: int = 0,
+    user_id: str | None = None,
+):
+    """Polling alternative to the SSE stream for environments that don't
+    support long-lived connections (e.g. Render free tier).
+
+    Clients pass ?after=<seq> to get only events newer than that sequence.
+    Returns {seq, events[]} — pass the returned seq as ?after on the next poll.
+    """
+    _require_api_key(http_request)
+    seq, events = telemetry_bus.recent(after_seq=after, user_id=user_id)
+    return {
+        "seq": seq,
+        "events": [ev.model_dump() for ev in events],
+    }
+
+
 # ============================================================
 # Health
 # ============================================================

@@ -26,19 +26,36 @@ class TelemetryTransport(Protocol):
     def subscribe(self) -> AsyncIterator[TelemetryEvent]: ...
 
 
+_DEFAULT_RING_SIZE = 500
+
+
 class TelemetryBus:
     """Async fan-out bus. Single-process, in-memory."""
 
-    def __init__(self, queue_maxsize: int = _DEFAULT_QUEUE_MAXSIZE) -> None:
+    def __init__(
+        self,
+        queue_maxsize: int = _DEFAULT_QUEUE_MAXSIZE,
+        ring_size: int = _DEFAULT_RING_SIZE,
+    ) -> None:
         self._queue_maxsize = queue_maxsize
         self._subscribers: set[asyncio.Queue[TelemetryEvent]] = set()
         self._lock = asyncio.Lock()
+        # Ring buffer of recent events for polling clients.
+        self._ring: list[TelemetryEvent] = []
+        self._ring_size = ring_size
+        self._seq = 0  # monotonic sequence counter
 
     async def publish(self, event: TelemetryEvent) -> None:
         """Broadcast to every subscriber. Never blocks, never raises.
 
         If a subscriber queue is full we drop its oldest event to make room.
         """
+        # Always append to ring buffer (even with no subscribers).
+        self._seq += 1
+        if len(self._ring) >= self._ring_size:
+            self._ring.pop(0)
+        self._ring.append(event)
+
         if not self._subscribers:
             return
         for queue in list(self._subscribers):
@@ -70,6 +87,29 @@ class TelemetryBus:
         finally:
             async with self._lock:
                 self._subscribers.discard(queue)
+
+    def recent(self, after_seq: int = 0, user_id: str | None = None) -> tuple[int, list[TelemetryEvent]]:
+        """Return (current_seq, events_after_seq), optionally filtered by user_id.
+
+        Clients pass the last seq they saw; we return only newer events.
+        """
+        # Find events newer than after_seq
+        start_idx = max(0, len(self._ring) - (self._seq - after_seq))
+        events = self._ring[start_idx:]
+
+        if user_id:
+            # Track which resolution_ids belong to the user
+            user_rids: set[str] = set()
+            filtered: list[TelemetryEvent] = []
+            for ev in events:
+                if ev.stage == "resolution_start":
+                    if ev.payload_summary.get("user_id") == user_id:
+                        user_rids.add(ev.resolution_id)
+                if ev.resolution_id in user_rids:
+                    filtered.append(ev)
+            events = filtered
+
+        return self._seq, events
 
     @property
     def subscriber_count(self) -> int:
