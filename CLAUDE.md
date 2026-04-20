@@ -58,8 +58,8 @@ Sample data models a Fortune 500 financial data company with:
 - Data contracts with SLAs for fact_revenue_daily
 
 ## What Needs Building Next (priority order)
-1. **Federation Adapter Layer** (`src/federation/`) — base `ContextSourceAdapter` class plus concrete adapters: `FabricIQAdapter` (MCP), `SnowflakeSVAAdapter` (API), `GleanAdapter` (API), `AtlanAdapter` (MCP), `DbtAdapter` (OSI), `NativeAdapter` (always on). See `docs/enterprise-context-platform-spec-v4.md` §1.3.
-2. **Conflict resolution logic** in the Resolution Engine: parallel discovery across adapters, source-attributed merging, certification-tier + precedent-based conflict resolution, `disambiguation_required` fallback. See spec-v4 §3.0 (Source-Aware Resolution).
+1. **Federation Adapter Layer** (`src/federation/`) — base `ContextSourceAdapter` class plus concrete adapters: `FabricIQAdapter` (MCP), `SnowflakeSVAAdapter` (API), `GleanAdapter` (API), `AtlanAdapter` (MCP), `DbtAdapter` (OSI), `NativeAdapter` (always on).
+2. **Conflict resolution logic** in the Resolution Engine: parallel discovery across adapters, source-attributed merging, certification-tier + precedent-based conflict resolution, `disambiguation_required` fallback.
 3. Real telemetry-based freshness (currently `temporal_validity` is derived from the data contract's freshness SLA, not observed lag — wire to Snowflake/dbt freshness metadata when available)
 4. OSI Bridge for import/export of semantic definitions (dbt MetricFlow, Cube schema, LookML)
 5. Drift detection service (currently a stub — diff Neo4j schema snapshots between scans, alert via webhook)

@@ -5,7 +5,6 @@ Snowflake SVA, Glean, Atlan, dbt — implements this ABC. The
 FederationOrchestrator calls these methods in parallel and merges results
 with source attribution.
 
-See docs/enterprise-context-platform-spec-v4.md §1.3.
 """
 from __future__ import annotations
 

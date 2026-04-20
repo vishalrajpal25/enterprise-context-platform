@@ -7,7 +7,6 @@ SourceCandidate results with source attribution.
 Conflict resolution: certification tier first, then registry.precedence,
 then disambiguation_required.
 
-See docs/enterprise-context-platform-spec-v4.md §1.3 and §3.0.
 """
 from __future__ import annotations
 
